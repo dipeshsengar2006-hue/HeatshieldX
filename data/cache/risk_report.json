@@ -1,0 +1,94 @@
+{
+  "config_version": "2026-10-09-prompt-4a-risk-backend",
+  "normalization_method": "min_max_global_all_canonical_snapshots",
+  "normalization_scope": "GLOBAL_ALL_FIVE_CANONICAL_SNAPSHOTS",
+  "vulnerability": {
+    "proxy_density_buffer_m": 50.0,
+    "proxy_density_method": "Sum cached OSM building footprint area whose centroid is inside the segment buffer.",
+    "commercial_proxy_tag_columns_available": [],
+    "available_proxy_tags": {},
+    "commercial_proxy_used": false,
+    "worker_proxy_mode": "density_fallback",
+    "assumption_label": "Prototype estimation assumption: cached OSM building-area density and market-activity proxies are not demographic counts."
+  },
+  "access": {
+    "water_facility_count": 0,
+    "cooling_facility_count": 0,
+    "healthcare_facility_count": 36,
+    "walking_distance_factor": 1.0,
+    "walking_distance_label": "Shortest path across cached OSM street segments from a segment midpoint to the nearest facility snapped to the network; disconnected paths are unavailable."
+  },
+  "snapshots": {
+    "09:00": {
+      "segment_count": 940,
+      "risk_score_min": 0.0,
+      "risk_score_mean": 12.02038667201057,
+      "risk_score_max": 38.38141190334873,
+      "class_counts": {
+        "LOW": 898,
+        "MODERATE": 42,
+        "HIGH": 0,
+        "CRITICAL": 0
+      },
+      "duration_seconds": 0.027362699853256345
+    },
+    "11:00": {
+      "segment_count": 940,
+      "risk_score_min": 0.0,
+      "risk_score_mean": 24.22846727811155,
+      "risk_score_max": 59.704418516320246,
+      "class_counts": {
+        "LOW": 518,
+        "MODERATE": 398,
+        "HIGH": 24,
+        "CRITICAL": 0
+      },
+      "duration_seconds": 0.0280774999409914
+    },
+    "13:00": {
+      "segment_count": 940,
+      "risk_score_min": 0.0,
+      "risk_score_mean": 32.06524505249191,
+      "risk_score_max": 100.0,
+      "class_counts": {
+        "LOW": 274,
+        "MODERATE": 566,
+        "HIGH": 94,
+        "CRITICAL": 6
+      },
+      "duration_seconds": 0.02573999995365739
+    },
+    "15:00": {
+      "segment_count": 940,
+      "risk_score_min": 0.0,
+      "risk_score_mean": 28.458702998370043,
+      "risk_score_max": 91.44877207593971,
+      "class_counts": {
+        "LOW": 374,
+        "MODERATE": 498,
+        "HIGH": 62,
+        "CRITICAL": 6
+      },
+      "duration_seconds": 0.02589789987541735
+    },
+    "17:00": {
+      "segment_count": 940,
+      "risk_score_min": 0.0,
+      "risk_score_mean": 13.821555247800937,
+      "risk_score_max": 56.48112657291678,
+      "class_counts": {
+        "LOW": 802,
+        "MODERATE": 134,
+        "HIGH": 4,
+        "CRITICAL": 0
+      },
+      "duration_seconds": 0.0288909999653697
+    }
+  },
+  "vulnerability_stats": {
+    "min": 0.0,
+    "mean": 0.32197886329201963,
+    "max": 1.0
+  },
+  "duration_seconds": 15.132232700008899
+}

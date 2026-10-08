@@ -9,7 +9,8 @@ from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
 from app.config import get_config
-from app.repositories.cache import cache_status, load_cached_geojson, load_exposure_snapshot, load_shadow_snapshot
+from app.repositories.cache import cache_status, load_cached_geojson, load_exposure_snapshot, load_risk_snapshot, load_shadow_snapshot
+from app.services.risk_engine import normalize_with_bounds, risk_class
 
 
 router = APIRouter()
@@ -144,6 +145,77 @@ def _interpolated_exposure_snapshot(requested_time: str, lower: dict, upper: dic
             "temperature_proxy_label": lower["metadata"]["temperature_proxy_label"],
         },
     }
+
+
+def _interpolated_risk_snapshot(requested_time: str, lower: dict, upper: dict, ratio: float) -> dict:
+    """Interpolate cached risk inputs and retain the canonical global score scope."""
+    upper_by_segment = {feature["properties"]["segment_id"]: feature for feature in upper["features"]}
+    metadata = lower["metadata"]
+    raw_min = float(metadata["global_final_risk_raw_min"])
+    raw_max = float(metadata["global_final_risk_raw_max"])
+    features = []
+    for lower_feature in lower["features"]:
+        lower_properties = lower_feature["properties"]
+        upper_feature = upper_by_segment.get(lower_properties["segment_id"])
+        if upper_feature is None:
+            raise HTTPException(status_code=503, detail="Risk cache snapshots have inconsistent street segments. Rerun `python scripts/precompute_risk.py`.")
+        upper_properties = upper_feature["properties"]
+        raw = float(lower_properties["final_risk_raw"]) + (float(upper_properties["final_risk_raw"]) - float(lower_properties["final_risk_raw"])) * ratio
+        score = normalize_with_bounds(raw, raw_min, raw_max)
+        properties = {
+            **lower_properties,
+            "canonical_time": requested_time,
+            "exposure_value": float(lower_properties["exposure_value"]) + (float(upper_properties["exposure_value"]) - float(lower_properties["exposure_value"])) * ratio,
+            "baseline_risk": float(lower_properties["baseline_risk"]) + (float(upper_properties["baseline_risk"]) - float(lower_properties["baseline_risk"])) * ratio,
+            "final_risk_raw": raw,
+            "risk_score": score,
+            "risk_class": risk_class(score),
+            "modelled_or_interpolated": "INTERPOLATED",
+            "observed_or_estimated": "ESTIMATED",
+            "interpolation_lower_time": metadata["canonical_time"],
+            "interpolation_upper_time": upper["metadata"]["canonical_time"],
+        }
+        features.append({"type": "Feature", "properties": properties, "geometry": lower_feature["geometry"]})
+    return {
+        "type": "FeatureCollection",
+        "features": features,
+        "metadata": {**metadata, "requested_time": requested_time, "canonical_time": None, "modelled_or_interpolated": "INTERPOLATED", "observed_or_estimated": "ESTIMATED", "interpolated": True, "interpolation_lower_time": metadata["canonical_time"], "interpolation_upper_time": upper["metadata"]["canonical_time"]},
+    }
+
+
+def _risk_snapshot_or_503(requested_time: str) -> dict:
+    """Return a canonical risk cache or an explicitly flagged cached-field interpolation."""
+    config = get_config()
+    requested_minutes = _minutes_since_midnight(requested_time)
+    start, end = _minutes_since_midnight(config.canonical_times[0]), _minutes_since_midnight(config.canonical_times[-1])
+    if requested_minutes < start or requested_minutes > end or requested_minutes % 30:
+        raise HTTPException(status_code=422, detail="Time must be between 09:00 and 17:00 in 30-minute increments.")
+    try:
+        if requested_time in config.canonical_times:
+            snapshot = load_risk_snapshot(requested_time, config)
+            snapshot.setdefault("metadata", {}).update({"requested_time": requested_time, "interpolated": False})
+            return snapshot
+        canonical_minutes = [_minutes_since_midnight(value) for value in config.canonical_times]
+        upper_index = next(index for index, minute in enumerate(canonical_minutes) if minute > requested_minutes)
+        lower_time, upper_time = config.canonical_times[upper_index - 1], config.canonical_times[upper_index]
+        ratio = (requested_minutes - canonical_minutes[upper_index - 1]) / (canonical_minutes[upper_index] - canonical_minutes[upper_index - 1])
+        return _interpolated_risk_snapshot(requested_time, load_risk_snapshot(lower_time, config), load_risk_snapshot(upper_time, config), ratio)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@router.get("/api/risk")
+def risk(time: str = Query(..., description="09:00–17:00 in 30-minute increments")) -> dict:
+    return _risk_snapshot_or_503(time)
+
+
+@router.get("/api/segments/{segment_id}/risk")
+def segment_risk(segment_id: str, time: str = Query(..., description="09:00–17:00 in 30-minute increments")) -> dict:
+    snapshot = _risk_snapshot_or_503(time)
+    for feature in snapshot["features"]:
+        if feature["properties"].get("segment_id") == segment_id:
+            return {"segment_id": segment_id, "requested_time": time, "risk": feature, "metadata": snapshot["metadata"]}
+    raise HTTPException(status_code=404, detail=f"Segment '{segment_id}' is not present in the cached risk snapshot.")
 
 
 @router.get("/api/exposure")

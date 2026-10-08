@@ -42,7 +42,10 @@ def geometric_exposure_value(direct_exposure_fraction: float, normalized_tempera
 
 def fallback_exposure_value(normalized_temperature_factor: float, config: AppConfig) -> float:
     """Return the bounded non-geometric fallback; it never uses shadow data."""
-    value = normalized_temperature_factor * config.static_fallback_shade_factor * config.exposure_duration_factor
+    base_direct_fraction = 1.0 - config.static_fallback_shade_factor
+    value = base_direct_fraction * (
+        config.exposure_direct_weight + config.exposure_temperature_weight * normalized_temperature_factor
+    ) * config.exposure_duration_factor
     return max(0.0, min(1.0, value))
 
 
@@ -61,7 +64,7 @@ def _metadata(config: AppConfig, canonical_time: str, mode: str, fallback_reason
             "clip(direct_exposure_fraction * (direct_weight + temperature_weight * "
             "normalized_temperature_factor) * exposure_duration_factor, 0, 1)"
             if mode == "geometric"
-            else "clip(normalized_temperature_factor * static_fallback_shade_factor * exposure_duration_factor, 0, 1)"
+            else "clip((1 - static_fallback_shade_factor) * (direct_weight + temperature_weight * normalized_temperature_factor) * exposure_duration_factor, 0, 1)"
         ),
     }
     if fallback_reason:
@@ -102,6 +105,7 @@ def _exposure_feature(
         result["direct_exposure_fraction"] = 1.0 - shade_fraction
     else:
         result["static_fallback_shade_factor"] = config.static_fallback_shade_factor
+        result["base_direct_fraction"] = 1.0 - config.static_fallback_shade_factor
         result["fallback_description"] = "Estimated exposure mode; no shadow simulation was used."
     return {"type": "Feature", "properties": result, "geometry": source_feature["geometry"]}
 

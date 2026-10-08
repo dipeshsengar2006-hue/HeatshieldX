@@ -31,6 +31,14 @@ def test_exposure_values_are_bounded_and_deterministic():
     assert 0.0 <= fallback_exposure_value(factor, config) <= 1.0
 
 
+def test_fallback_exposure_has_a_positive_base_direct_fraction_for_every_time():
+    """The non-shadow mode must never produce an all-zero map at the cool end."""
+    config = get_config()
+    values = [fallback_exposure_value(temperature_factor(config, time), config) for time in config.canonical_times]
+    assert all(value > 0.0 for value in values)
+    assert values == [fallback_exposure_value(temperature_factor(config, time), config) for time in config.canonical_times]
+
+
 def test_geometric_exposure_is_monotonic_for_direct_exposure_and_shade():
     config = get_config()
     factor = temperature_factor(config, "13:00")

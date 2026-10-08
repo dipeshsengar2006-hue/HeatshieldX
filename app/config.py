@@ -56,6 +56,14 @@ class AppConfig(BaseModel):
     exposure_temperature_weight: float = Field(ge=0, le=1)
     exposure_duration_factor: float = Field(gt=0)
     static_fallback_shade_factor: float = Field(ge=0, le=1)
+    vulnerability_buffer_m: float = Field(gt=0)
+    elderly_share_assumption: float = Field(ge=0, le=1)
+    outdoor_worker_share_assumption: float = Field(ge=0, le=1)
+    vulnerability_proxy_label: str
+    commercial_proxy_tag_values: tuple[str, ...]
+    walking_distance_factor: float = Field(ge=1)
+    walking_distance_label: str
+    risk_normalization_scope: str
     facility_tag_rules: dict[str, dict[str, tuple[str, ...]]]
     facility_classification_order: tuple[str, ...]
     osm_request_timeout_s: int
@@ -74,7 +82,7 @@ def get_config() -> AppConfig:
         raise ValueError("HEATSHIELD_EXPOSURE_MODE must be geometric or estimated.")
 
     return AppConfig(
-        version="2026-10-09-prompt-3-exposure",
+        version="2026-10-09-prompt-4a-risk-backend",
         demo_area=DemoArea(
             name="Rajwada-Sarafa demonstration area",
             city="Indore",
@@ -96,7 +104,7 @@ def get_config() -> AppConfig:
             "preloaded_mode": True,
             "shadow_engine": True,
             "exposure_engine": True,
-            "risk_engine": False,
+            "risk_engine": True,
             "routing": False,
             "copilot": False,
         },
@@ -104,15 +112,15 @@ def get_config() -> AppConfig:
             "streets": "OpenStreetMap via OSMnx",
             "buildings": "OpenStreetMap via OSMnx",
             "facilities": "OpenStreetMap via OSMnx; existing facilities only",
-            "demographics": "Ward-level estimation planned; not loaded in Prompt 1",
+            "demographics": "Estimated prioritization proxies derived from cached OSM building data; not demographic counts",
         },
         # Required central placeholders for later SRS modules. They are not used in Prompt 1.
-        risk_normalization_method="min_max_selected_analysis_scope",
+        risk_normalization_method="min_max_global_all_canonical_snapshots",
         risk_class_ranges={"LOW": (0, 25), "MODERATE": (26, 50), "HIGH": (51, 75), "CRITICAL": (76, 100)},
-        vulnerability_weights={"elderly": 0.5, "outdoor_workers": 0.5},
-        cooling_service_radius_m=750,
-        water_service_radius_m=400,
-        access_penalty_weights={"water": 0.5, "cooling": 0.5, "availability": 1.0},
+        vulnerability_weights={"elderly": 0.6, "outdoor_workers": 0.4},
+        cooling_service_radius_m=650,
+        water_service_radius_m=300,
+        access_penalty_weights={"water": 0.5, "cooling": 0.5},
         intervention_effect_coefficients={"water_point": 0.0, "cooling_centre": 0.0, "shade_structure": 0.0},
         route_objective_weights={"alpha": 0.5, "beta": 0.5},
         representative_heatwave_date=date(2026, 5, 15),
@@ -132,6 +140,16 @@ def get_config() -> AppConfig:
         exposure_temperature_weight=0.5,
         exposure_duration_factor=1.0,
         static_fallback_shade_factor=0.5,
+        vulnerability_buffer_m=50.0,
+        elderly_share_assumption=0.12,
+        outdoor_worker_share_assumption=0.25,
+        vulnerability_proxy_label=(
+            "Prototype estimation assumption: cached OSM building-area density and market-activity proxies are not demographic counts."
+        ),
+        commercial_proxy_tag_values=("retail", "commercial", "market", "shop", "mall"),
+        walking_distance_factor=1.0,
+        walking_distance_label="Shortest path across cached OSM street segments from a segment midpoint to the nearest facility snapped to the network; disconnected paths are unavailable.",
+        risk_normalization_scope="GLOBAL_ALL_FIVE_CANONICAL_SNAPSHOTS",
         facility_tag_rules={
             "healthcare": {"amenity": ("hospital", "clinic")},
             "water": {

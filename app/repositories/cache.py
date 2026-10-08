@@ -57,3 +57,16 @@ def load_exposure_snapshot(canonical_time: str, config: AppConfig | None = None)
             "Run `python scripts/precompute_exposure.py` after the required cache data is available."
         )
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def load_risk_snapshot(canonical_time: str, config: AppConfig | None = None) -> dict:
+    """Load one canonical cache-only risk snapshot."""
+    active_config = config or get_config()
+    slug = canonical_time.replace(":", "-")
+    path = active_config.cache_data_dir / f"risk_{slug}.geojson"
+    if not path.exists():
+        raise FileNotFoundError(
+            f"Precomputed risk for {canonical_time} is unavailable at {path}. "
+            "Run `python scripts/precompute_risk.py` after the required exposure cache is available."
+        )
+    return json.loads(path.read_text(encoding="utf-8"))
