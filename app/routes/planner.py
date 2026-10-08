@@ -7,7 +7,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
 from app.config import get_config
-from app.repositories.cache import cache_status, load_cached_geojson
+from app.repositories.cache import cache_status, load_cached_geojson, load_shadow_snapshot
 
 
 router = APIRouter()
@@ -37,6 +37,7 @@ def planner(request: Request) -> HTMLResponse:
         {
             "demo_area": config.demo_area,
             "config_version": config.version,
+            "shadow_times": config.canonical_times,
             "load_error": load_error,
         },
     )
@@ -66,3 +67,26 @@ def status() -> dict:
         "computation_mode": config.computation_mode,
         "cache": cache_status(config),
     }
+
+
+def _shadow_snapshot_or_503(kind: str, canonical_time: str) -> dict:
+    config = get_config()
+    if canonical_time not in config.canonical_times:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Unsupported shadow time '{canonical_time}'. Use one of: {', '.join(config.canonical_times)}.",
+        )
+    try:
+        return load_shadow_snapshot(kind, canonical_time, config)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@router.get("/api/shadows/{canonical_time}/polygons")
+def shadow_polygons(canonical_time: str) -> dict:
+    return _shadow_snapshot_or_503("shadow_polygons", canonical_time)
+
+
+@router.get("/api/shadows/{canonical_time}/shade-fractions")
+def shade_fractions(canonical_time: str) -> dict:
+    return _shadow_snapshot_or_503("shade_fractions", canonical_time)

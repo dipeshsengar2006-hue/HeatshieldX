@@ -25,6 +25,16 @@ python scripts/precompute_demo_area.py
 If the coverage gate fails, stop and select another dense approximately 1 km2
 Indore area explicitly; do not silently change configuration.
 
+## Precompute geometric shadow validation snapshots
+
+After Prompt 1 cache data is present, calculate and cache the five geometric
+shadow-validation snapshots. This uses the configured 2026-05-15 date and
+Asia/Kolkata timezone; it does not run during web requests.
+
+```powershell
+python scripts/precompute_shadows.py
+```
+
 ## Run locally
 
 ```powershell

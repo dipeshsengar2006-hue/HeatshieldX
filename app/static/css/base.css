@@ -34,4 +34,11 @@ h1 { margin: 0; font-size: clamp(1.6rem, 4vw, 2.5rem); letter-spacing: -0.045em;
 .legend-street { background: var(--street); }
 .legend-building { height: 10px !important; background: var(--building); opacity: .55; }
 footer { padding: 1rem 5vw 2rem; color: var(--muted); font-size: .78rem; }
-@media (max-width: 640px) { .site-header { min-height: auto; flex-wrap: wrap; gap: 8px; padding: 1rem; } .site-header p { order: 3; flex-basis: 100%; } .planner-shell { padding: 1rem; } .map-panel { min-height: 62vh; } .map-legend { right: 10px; bottom: 10px; } }
+.shadow-check { display: grid; grid-template-columns: 1fr auto; gap: 1rem; align-items: center; margin-top: 1rem; padding: 1rem; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
+.shadow-check h2 { margin: 0; font-size: 1.1rem; }
+.shadow-check p:last-child { margin: .35rem 0 0; color: var(--muted); font-size: .9rem; }
+.shadow-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .5rem; }
+.shadow-time { border: 1px solid var(--line); border-radius: 8px; padding: .5rem .7rem; color: var(--ink); background: var(--surface); font: inherit; font-weight: 700; cursor: pointer; }
+.shadow-time:hover, .shadow-time:focus-visible, .shadow-time[aria-pressed="true"] { border-color: var(--brand); color: var(--brand-dark); background: #fff0eb; }
+.shadow-status { grid-column: 1 / -1; }
+@media (max-width: 640px) { .site-header { min-height: auto; flex-wrap: wrap; gap: 8px; padding: 1rem; } .site-header p { order: 3; flex-basis: 100%; } .planner-shell { padding: 1rem; } .map-panel { min-height: 62vh; } .map-legend { right: 10px; bottom: 10px; } .shadow-check { grid-template-columns: 1fr; } .shadow-actions { justify-content: flex-start; } }

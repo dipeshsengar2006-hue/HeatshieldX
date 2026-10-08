@@ -1,0 +1,140 @@
+{
+  "config_version": "2026-10-09-prompt-2-geometric-shadows",
+  "computation_mode": "geometric",
+  "representative_date": "2026-05-15",
+  "timezone": "Asia/Kolkata",
+  "estimated_height_building_count": 3793,
+  "snapshots": {
+    "09:00": {
+      "canonical_time": "09:00",
+      "solar": {
+        "canonical_time": "09:00",
+        "azimuth_deg": 84.79522718382941,
+        "elevation_deg": 42.65441052853442,
+        "timestamp": "2026-05-15T09:00:00+05:30"
+      },
+      "computation_mode": "geometric",
+      "config_version": "2026-10-09-prompt-2-geometric-shadows",
+      "estimated_height_building_count": 3793,
+      "has_estimated_building_heights": true,
+      "geometry_stats": {
+        "invalid_buildings_repaired": 0,
+        "invalid_buildings_skipped": 0,
+        "shadow_buildings_skipped": 0,
+        "invalid_streets_repaired": 0,
+        "invalid_streets_skipped": 0
+      },
+      "duration_seconds": 3.454276200151071,
+      "shadow_count": 3793,
+      "street_count": 940,
+      "shade_fraction_min": 0.0,
+      "shade_fraction_mean": 0.25473763733598614,
+      "shade_fraction_max": 1.0
+    },
+    "11:00": {
+      "canonical_time": "11:00",
+      "solar": {
+        "canonical_time": "11:00",
+        "azimuth_deg": 97.38286269684261,
+        "elevation_deg": 70.26792183557376,
+        "timestamp": "2026-05-15T11:00:00+05:30"
+      },
+      "computation_mode": "geometric",
+      "config_version": "2026-10-09-prompt-2-geometric-shadows",
+      "estimated_height_building_count": 3793,
+      "has_estimated_building_heights": true,
+      "geometry_stats": {
+        "invalid_buildings_repaired": 0,
+        "invalid_buildings_skipped": 0,
+        "shadow_buildings_skipped": 0,
+        "invalid_streets_repaired": 0,
+        "invalid_streets_skipped": 0
+      },
+      "duration_seconds": 3.666585800005123,
+      "shadow_count": 3793,
+      "street_count": 940,
+      "shade_fraction_min": 0.0,
+      "shade_fraction_mean": 0.07165867848549971,
+      "shade_fraction_max": 1.0
+    },
+    "13:00": {
+      "canonical_time": "13:00",
+      "solar": {
+        "canonical_time": "13:00",
+        "azimuth_deg": 247.88778349614512,
+        "elevation_deg": 80.53225293036408,
+        "timestamp": "2026-05-15T13:00:00+05:30"
+      },
+      "computation_mode": "geometric",
+      "config_version": "2026-10-09-prompt-2-geometric-shadows",
+      "estimated_height_building_count": 3793,
+      "has_estimated_building_heights": true,
+      "geometry_stats": {
+        "invalid_buildings_repaired": 0,
+        "invalid_buildings_skipped": 0,
+        "shadow_buildings_skipped": 0,
+        "invalid_streets_repaired": 0,
+        "invalid_streets_skipped": 0
+      },
+      "duration_seconds": 4.040448000188917,
+      "shadow_count": 3793,
+      "street_count": 940,
+      "shade_fraction_min": 0.0,
+      "shade_fraction_mean": 0.0030204792718726463,
+      "shade_fraction_max": 0.3049173972919652
+    },
+    "15:00": {
+      "canonical_time": "15:00",
+      "solar": {
+        "canonical_time": "15:00",
+        "azimuth_deg": 271.54425686027565,
+        "elevation_deg": 53.21021702250467,
+        "timestamp": "2026-05-15T15:00:00+05:30"
+      },
+      "computation_mode": "geometric",
+      "config_version": "2026-10-09-prompt-2-geometric-shadows",
+      "estimated_height_building_count": 3793,
+      "has_estimated_building_heights": true,
+      "geometry_stats": {
+        "invalid_buildings_repaired": 0,
+        "invalid_buildings_skipped": 0,
+        "shadow_buildings_skipped": 0,
+        "invalid_streets_repaired": 0,
+        "invalid_streets_skipped": 0
+      },
+      "duration_seconds": 4.068870200077072,
+      "shadow_count": 3793,
+      "street_count": 940,
+      "shade_fraction_min": 0.0,
+      "shade_fraction_mean": 0.13693500666644903,
+      "shade_fraction_max": 0.9989386171145429
+    },
+    "17:00": {
+      "canonical_time": "17:00",
+      "solar": {
+        "canonical_time": "17:00",
+        "azimuth_deg": 280.8760230282325,
+        "elevation_deg": 25.762234873139366,
+        "timestamp": "2026-05-15T17:00:00+05:30"
+      },
+      "computation_mode": "geometric",
+      "config_version": "2026-10-09-prompt-2-geometric-shadows",
+      "estimated_height_building_count": 3793,
+      "has_estimated_building_heights": true,
+      "geometry_stats": {
+        "invalid_buildings_repaired": 0,
+        "invalid_buildings_skipped": 0,
+        "shadow_buildings_skipped": 0,
+        "invalid_streets_repaired": 0,
+        "invalid_streets_skipped": 0
+      },
+      "duration_seconds": 4.060602100100368,
+      "shadow_count": 3793,
+      "street_count": 940,
+      "shade_fraction_min": 0.0,
+      "shade_fraction_mean": 0.4167958383476279,
+      "shade_fraction_max": 1.0
+    }
+  },
+  "duration_seconds": 24.54854999994859
+}

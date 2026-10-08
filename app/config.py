@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import os
-from functools import lru_cache
 from datetime import date
+from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
@@ -45,6 +45,10 @@ class AppConfig(BaseModel):
     representative_heatwave_date: date
     representative_timezone: str
     hourly_temperature_proxy_assumption: str
+    solar_position_method: str
+    shadow_min_solar_elevation_deg: float
+    shadow_max_length_m: float
+    shadow_computation_mode: Literal["geometric"]
     facility_tag_rules: dict[str, dict[str, tuple[str, ...]]]
     facility_classification_order: tuple[str, ...]
     osm_request_timeout_s: int
@@ -60,7 +64,7 @@ def get_config() -> AppConfig:
         raise ValueError("HEATSHIELD_COMPUTATION_MODE must be FULL, SIMPLIFIED, or FALLBACK.")
 
     return AppConfig(
-        version="2026-10-09-prompt-1-facilities",
+        version="2026-10-09-prompt-2-geometric-shadows",
         demo_area=DemoArea(
             name="Rajwada-Sarafa demonstration area",
             city="Indore",
@@ -106,6 +110,10 @@ def get_config() -> AppConfig:
             "Hourly temperature values are a documented prototype assumption for fallback exposure mode, "
             "not observed heat measurements."
         ),
+        solar_position_method="nrel_numpy",
+        shadow_min_solar_elevation_deg=1.0,
+        shadow_max_length_m=150.0,
+        shadow_computation_mode="geometric",
         facility_tag_rules={
             "healthcare": {"amenity": ("hospital", "clinic")},
             "water": {

@@ -29,6 +29,19 @@
           <span><i class="legend-building"></i> Buildings</span>
         </aside>
       </section>
+      <section class="shadow-check" aria-labelledby="shadow-check-title">
+        <div>
+          <p class="eyebrow">Geometry validation</p>
+          <h2 id="shadow-check-title">Shadow check</h2>
+          <p>Draw cached geometric shadows and street shade fractions for one canonical time.</p>
+        </div>
+        <div class="shadow-actions" role="group" aria-label="Shadow check time">
+          {% for time in shadow_times %}
+          <button type="button" class="shadow-time" data-shadow-time="{{ time }}">{{ time }}</button>
+          {% endfor %}
+        </div>
+        <p id="shadow-status" class="shadow-status" aria-live="polite">Choose a time to validate cached shadows.</p>
+      </section>
     </main>
     <footer>Configuration {{ config_version }} · Source: OpenStreetMap contributors</footer>
     <script src="/static/vendor/leaflet.js"></script>
