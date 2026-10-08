@@ -5,6 +5,12 @@ def test_cached_geojson_endpoints_return_feature_collections(client):
         assert response.json()["type"] == "FeatureCollection"
 
 
+def test_empty_facilities_are_a_valid_preloaded_response(client):
+    response = client.get("/api/facilities")
+    assert response.status_code == 200
+    assert response.json()["features"] == []
+
+
 def test_planner_uses_preloaded_data(client):
     response = client.get("/")
     assert response.status_code == 200

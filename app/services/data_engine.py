@@ -20,8 +20,6 @@ from app.contracts import Building, Provenance, StreetSegment
 
 
 LOGGER = logging.getLogger(__name__)
-WATER_AMENITIES = {"drinking_water", "water_point"}
-COOLING_AMENITIES = {"clinic", "hospital", "community_centre", "social_facility", "shelter"}
 
 
 class CoverageGateError(RuntimeError):
@@ -183,19 +181,42 @@ def _normalize_buildings(buildings: gpd.GeoDataFrame, config: AppConfig) -> gpd.
     return gpd.GeoDataFrame(records, geometry="geometry", crs=projected.crs)
 
 
+def facility_query_tags(config: AppConfig) -> dict[str, list[str]]:
+    """Build the OSM query exclusively from centrally configured facility tags."""
+    tags: dict[str, set[str]] = {}
+    for type_rules in config.facility_tag_rules.values():
+        for tag_key, values in type_rules.items():
+            tags.setdefault(tag_key, set()).update(values)
+    return {tag_key: sorted(values) for tag_key, values in tags.items()}
+
+
+def classify_facility(row: Any, config: AppConfig) -> tuple[str, str, str] | None:
+    """Return facility type and matching OSM tag; healthcare never counts as cooling."""
+    for facility_type in config.facility_classification_order:
+        for tag_key, values in config.facility_tag_rules[facility_type].items():
+            value = row.get(tag_key)
+            if value is not None and str(value) in values:
+                return facility_type, tag_key, str(value)
+    return None
+
+
 def _normalize_facilities(facilities: gpd.GeoDataFrame, config: AppConfig) -> gpd.GeoDataFrame:
     projected = project_to_metric_crs(repair_and_filter_geometries(facilities, {"Point", "Polygon", "MultiPolygon"}, "facilities"))
     records: list[dict[str, Any]] = []
     for index, row in projected.iterrows():
-        amenity = str(row.get("amenity", ""))
-        facility_type = "water" if amenity in WATER_AMENITIES else "cooling"
+        classification = classify_facility(row, config)
+        if classification is None:
+            LOGGER.warning("Skipping facility with no configured classification: %s", index)
+            continue
+        facility_type, osm_tag_key, osm_tag_value = classification
         geometry: BaseGeometry = row.geometry.centroid if row.geometry.geom_type != "Point" else row.geometry
         index_parts = index if isinstance(index, tuple) else (index,)
         records.append({
             "facility_id": "osm-" + "-".join(_safe_identifier(part) for part in index_parts),
             "facility_type": facility_type,
             "name": _json_safe(row.get("name")),
-            "amenity": amenity,
+            "osm_tag_key": osm_tag_key,
+            "osm_tag_value": osm_tag_value,
             "existing_facility": True,
             "source_type": "osm",
             "source_reference": "OpenStreetMap via OSMnx",
@@ -232,11 +253,7 @@ def precompute_demo_area(config: AppConfig | None = None) -> dict[str, int | boo
         graph = ox.graph_from_point(point, dist=active_config.demo_area.radius_m, dist_type="bbox", network_type="walk")
         edges = ox.graph_to_gdfs(graph, nodes=False, fill_edge_geometry=True)
         buildings = ox.features_from_point(point, tags={"building": True}, dist=active_config.demo_area.radius_m)
-        facilities = ox.features_from_point(
-            point,
-            tags={"amenity": sorted(WATER_AMENITIES | COOLING_AMENITIES)},
-            dist=active_config.demo_area.radius_m,
-        )
+        facilities = ox.features_from_point(point, tags=facility_query_tags(active_config), dist=active_config.demo_area.radius_m)
     except Exception as exc:  # OSM/network exceptions vary by provider and library version.
         message = (
             "Unable to load OpenStreetMap data for the configured demo area. "
@@ -253,10 +270,20 @@ def precompute_demo_area(config: AppConfig | None = None) -> dict[str, int | boo
     # Raw files retain only directly downloaded/observed normalized OSM fields in WGS84.
     _write_geojson(active_config.raw_data_dir / "streets_osm.geojson", _to_wgs84(_raw_from_normalized(street_records, ["segment_id", "road_metadata"])))
     _write_geojson(active_config.raw_data_dir / "buildings_osm.geojson", _to_wgs84(_raw_from_normalized(building_records, ["building_id", "height_source", "levels"])))
-    _write_geojson(active_config.raw_data_dir / "facilities_osm.geojson", _to_wgs84(_raw_from_normalized(facility_records, ["facility_id", "facility_type", "name", "amenity", "existing_facility"])))
+    _write_geojson(active_config.raw_data_dir / "facilities_osm.geojson", _to_wgs84(_raw_from_normalized(facility_records, ["facility_id", "facility_type", "name", "osm_tag_key", "osm_tag_value", "existing_facility"])))
 
-    water_count = int((facility_records.get("facility_type") == "water").sum()) if not facility_records.empty else 0
-    cooling_count = int((facility_records.get("facility_type") == "cooling").sum()) if not facility_records.empty else 0
+    facility_type_counts = {
+        facility_type: int((facility_records.get("facility_type") == facility_type).sum()) if not facility_records.empty else 0
+        for facility_type in active_config.facility_classification_order
+    }
+    facility_tag_counts = {
+        f"{tag_key}={tag_value}": int(
+            ((facility_records.get("osm_tag_key") == tag_key) & (facility_records.get("osm_tag_value") == tag_value)).sum()
+        ) if not facility_records.empty else 0
+        for type_rules in active_config.facility_tag_rules.values()
+        for tag_key, values in type_rules.items()
+        for tag_value in values
+    }
     tagged_height_or_levels = int(
         ((building_records["height_source"] == "actual") | (building_records["height_source"] == "levels")).sum()
     ) if not building_records.empty else 0
@@ -265,8 +292,11 @@ def precompute_demo_area(config: AppConfig | None = None) -> dict[str, int | boo
         "streets": len(street_records),
         "buildings": len(building_records),
         "buildings_with_height_or_levels_tags": tagged_height_or_levels,
-        "water_facilities": water_count,
-        "cooling_facilities": cooling_count,
+        "facilities_by_type": facility_type_counts,
+        "facilities_by_osm_tag": facility_tag_counts,
+        "water_facilities": facility_type_counts["water"],
+        "cooling_facilities": facility_type_counts["cooling"],
+        "healthcare_facilities": facility_type_counts["healthcare"],
         "minimum_buildings_for_shadow": active_config.minimum_building_count_for_shadow,
         "shadow_ready": len(building_records) >= active_config.minimum_building_count_for_shadow,
         "metric_crs": str(street_records.crs),

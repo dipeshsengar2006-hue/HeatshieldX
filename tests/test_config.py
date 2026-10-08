@@ -11,3 +11,6 @@ def test_central_config_contains_prompt_one_and_srs_keys():
     assert config.data_source_metadata["facilities"].startswith("OpenStreetMap")
     assert config.risk_normalization_method
     assert config.route_objective_weights
+    assert config.representative_heatwave_date.isoformat() == "2026-05-15"
+    assert config.representative_timezone == "Asia/Kolkata"
+    assert config.facility_tag_rules["cooling"]["amenity"] == ("library", "community_centre", "townhall")

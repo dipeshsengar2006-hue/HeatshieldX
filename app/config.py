@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 from functools import lru_cache
+from datetime import date
 from pathlib import Path
 from typing import Literal
 
@@ -41,6 +42,11 @@ class AppConfig(BaseModel):
     access_penalty_weights: dict[str, float]
     intervention_effect_coefficients: dict[str, float]
     route_objective_weights: dict[str, float]
+    representative_heatwave_date: date
+    representative_timezone: str
+    hourly_temperature_proxy_assumption: str
+    facility_tag_rules: dict[str, dict[str, tuple[str, ...]]]
+    facility_classification_order: tuple[str, ...]
     osm_request_timeout_s: int
     raw_data_dir: Path
     cache_data_dir: Path
@@ -54,7 +60,7 @@ def get_config() -> AppConfig:
         raise ValueError("HEATSHIELD_COMPUTATION_MODE must be FULL, SIMPLIFIED, or FALLBACK.")
 
     return AppConfig(
-        version="2026-10-09-prompt-1",
+        version="2026-10-09-prompt-1-facilities",
         demo_area=DemoArea(
             name="Rajwada-Sarafa demonstration area",
             city="Indore",
@@ -94,6 +100,24 @@ def get_config() -> AppConfig:
         access_penalty_weights={"water": 0.5, "cooling": 0.5, "availability": 1.0},
         intervention_effect_coefficients={"water_point": 0.0, "cooling_centre": 0.0, "shade_structure": 0.0},
         route_objective_weights={"alpha": 0.5, "beta": 0.5},
+        representative_heatwave_date=date(2026, 5, 15),
+        representative_timezone="Asia/Kolkata",
+        hourly_temperature_proxy_assumption=(
+            "Hourly temperature values are a documented prototype assumption for fallback exposure mode, "
+            "not observed heat measurements."
+        ),
+        facility_tag_rules={
+            "healthcare": {"amenity": ("hospital", "clinic")},
+            "water": {
+                "amenity": ("drinking_water", "water_point", "fountain"),
+                "man_made": ("water_tap",),
+            },
+            "cooling": {
+                "amenity": ("library", "community_centre", "townhall"),
+                "shop": ("mall",),
+            },
+        },
+        facility_classification_order=("healthcare", "water", "cooling"),
         osm_request_timeout_s=45,
         raw_data_dir=PROJECT_ROOT / "data" / "raw",
         cache_data_dir=PROJECT_ROOT / "data" / "cache",

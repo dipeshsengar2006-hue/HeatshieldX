@@ -131,25 +131,24 @@ before doing so.
   data. An LLM is optional; select any provider with an available free key only
   when needed. Keys are stored only in `.env`, never in source, configuration,
   the frontend, or documentation.
+- **Representative heat case:** Use 2026-05-15 in `Asia/Kolkata`, configured
+  centrally. Any hourly temperature proxy is a documented prototype assumption,
+  not an observed temperature or medical measurement.
+- **Map and data provenance:** OSM tiles are online presentation assets; cached
+  streets and buildings must still render when tiles fail. The footer credits
+  `© OpenStreetMap contributors` and will show the data-download date.
+- **Safe stops and guidance:** Use OSM-supported stops only, with no invented
+  ratings. Provide short general English/Hindi heat guidance with no medical
+  advice.
+- **Resource defaults:** Start planners at 2 water points, 1 cooling centre,
+  and 2 shade structures; keep the controls editable in the later optimizer.
+- **Demo data:** Serve the demo from the preloaded cache. Live OSM access is
+  restricted to the precompute script.
 
 ### Remaining inputs to confirm
 
-1. Which date, timezone, and representative weather/temperature proxy should
-   be configured for solar positions and fallback exposure in the demo area?
-2. Which map tile provider and attribution treatment are approved for the
-   public demo, and must it work without internet connectivity?
-3. What is the exact source/licence and freshness expectation for OSM and
+1. What is the exact source/licence and freshness expectation for OSM and
    demographic/facility data snapshots to be cited in the UI?
-4. Are there known verified heat-safe businesses or shaded public areas for the
-   selected area, or should the safe-stop MVP only use source-supported OSM /
-   curated facilities?
-5. What general heat-safety text is approved for English and Hindi? It must
-    remain general guidance and must not diagnose.
-6. Are the default intervention inventory examples (2 water points, 1 cooling
-    centre, 2 shade structures) the intended initial UI values, while remaining
-    editable by the planner?
-7. Should the final demo use a preloaded snapshot by default even when a live
-    OSM download succeeds, to maximise reproducibility?
 
 ## 4. Simple architecture and folder structure
 

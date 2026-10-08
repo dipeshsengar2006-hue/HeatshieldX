@@ -4,9 +4,27 @@
   "buildings": 3793,
   "buildings_with_height_or_levels_tags": 0,
   "water_facilities": 0,
-  "cooling_facilities": 36,
+  "cooling_facilities": 0,
   "minimum_buildings_for_shadow": 25,
   "shadow_ready": true,
   "metric_crs": "EPSG:32643",
-  "config_version": "2026-10-09-prompt-1"
+  "config_version": "2026-10-09-prompt-1-facilities",
+  "facilities_by_type": {
+    "healthcare": 36,
+    "water": 0,
+    "cooling": 0
+  },
+  "facilities_by_osm_tag": {
+    "amenity=hospital": 11,
+    "amenity=clinic": 25,
+    "amenity=drinking_water": 0,
+    "amenity=water_point": 0,
+    "amenity=fountain": 0,
+    "man_made=water_tap": 0,
+    "amenity=library": 0,
+    "amenity=community_centre": 0,
+    "amenity=townhall": 0,
+    "shop=mall": 0
+  },
+  "healthcare_facilities": 36
 }
