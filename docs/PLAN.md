@@ -145,6 +145,32 @@ before doing so.
 - **Demo data:** Serve the demo from the preloaded cache. Live OSM access is
   restricted to the precompute script.
 
+### Prompt 3: 12-hour shadow checkpoint — PASS
+
+The geometric shadow engine passed the SRS 13 checkpoint on the fixed
+Rajwada-Sarafa cache. It produced valid geometric shade fractions for all 940
+street segments at all five canonical times, with all 3,793 building heights
+using the configured 6 m estimated fallback. No invalid geometries were
+repaired or skipped in this run. The resulting exposure slider therefore uses
+**Geometric shadow mode** by default. If a shadow snapshot is unavailable,
+Prompt 3 automatically uses the separately labelled **Estimated Exposure
+Mode** (temperature proxy × static fallback factor × duration), which is not
+described as shadow simulation.
+
+The following evidence is recorded from `data/cache/shadow_report.json`
+(configuration `2026-10-09-prompt-3-exposure`):
+
+| Time | Shade min | Shade mean | Shade max | Shadow compute duration |
+| --- | ---: | ---: | ---: | ---: |
+| 09:00 | 0.000000 | 0.254738 | 1.000000 | 3.518 s |
+| 11:00 | 0.000000 | 0.071659 | 1.000000 | 3.643 s |
+| 13:00 | 0.000000 | 0.003020 | 0.304917 | 3.579 s |
+| 15:00 | 0.000000 | 0.136935 | 0.998939 | 3.639 s |
+| 17:00 | 0.000000 | 0.416796 | 1.000000 | 3.878 s |
+
+Total geometric shadow precompute duration: 22.973 s. This is a deterministic
+prototype exposure input, not a heat-health or medical model.
+
 ### Remaining inputs to confirm
 
 1. What is the exact source/licence and freshness expectation for OSM and
@@ -366,8 +392,8 @@ This sequence follows SRS section 43, P0/P1/P2 ordering, the mandatory
 | --- | --- | --- |
 | 0-4 | P0 | Skeleton, central config, Rajwada-Sarafa (~1 km2) OSM building-coverage check, documented substitute-area selection if needed, OSM/preloaded-data path, street segmentation with stable IDs, OSM water/cooling count report, cached precompute script, basic Leaflet map, and responsive design-system shell. Gate: sufficient building coverage is evidenced or a substitute area is documented; OSM failure displays an actionable error and preloaded demo mode works when configured. |
 | 4-8 | P0 | OSM-height -> levels x 3 m -> 6 m hierarchy, projected CRS policy, one-building shadow test, solar-position and expected-direction validation. Gate: estimated height/provenance and geospatial unit tests pass. |
-| 8-12 | P0 | Multiple-building shadows, street intersections, five canonical timestamps, exposure calculation/caching. **Hard checkpoint:** reliable geometric results -> `FULL`; otherwise activate `SIMPLIFIED` if prepared or `FALLBACK` (temperature proxy x static shade factor x exposure duration), display **Estimated Exposure Mode**, and keep the slider functional. |
-| 12-20 | P0 | Ward-level estimated vulnerability with transparent distribution, OSM-existing-only cooling/water access, risk pipeline, map snapshot endpoint, time slider, WHY panel, Why-not-the-hottest, and provenance/status display. Gate: P0 data/risk/dashboard acceptance checks pass in the active mode. |
+| 8-12 | P0 | Multiple-building shadows, street intersections, five canonical timestamps, exposure calculation/caching, and the 09:00-17:00 exposure slider. **Hard checkpoint:** reliable geometric results -> `FULL`; otherwise activate `SIMPLIFIED` if prepared or `FALLBACK` (temperature proxy x static shade factor x exposure duration), display **Estimated Exposure Mode**, and keep the slider functional. |
+| 12-20 | P0 | Ward-level estimated vulnerability with transparent distribution, OSM-existing-only cooling/water access, risk pipeline, map snapshot endpoint, WHY panel, Why-not-the-hottest, and provenance/status display. Prompt 4 reuses the Prompt 3 exposure slider. Gate: P0 data/risk/dashboard acceptance checks pass in the active mode. |
 | 20-27 | P0 | Intervention candidates, editable resource limits, deterministic greedy optimizer, and same-pipeline before/**Modelled Impact** after. Gate: P0 optimization checks and constraint tests pass. |
 | 27-31 | P1 | Graph routing, FASTEST/HEAT-AWARE/BALANCED comparison, and safe-stop logic using actual data. Gate: P1 route comparison checks pass without fabricated routes/stops. |
 | 31-34 | P1 then P2 | Hindi public view (P1); only if stable, template-based grounded Copilot, then optional LLM rendering with a free-key provider kept in `.env`, and optional labelled sponsored flag (P2); UI/accessibility polish. Gate: Copilot grounding tests block unavailable facts. |
@@ -387,8 +413,8 @@ routes serve cached results rather than triggering full GIS processing.
 | --- | --- | --- |
 | 1. Foundation and data loading | App skeleton, one central config, Rajwada-Sarafa OSM building-coverage validation, documented substitute area if required, street segmentation with stable IDs, OSM water/cooling facility loading and count report, raw/cache precompute script, base planner map, and responsive design-system shell. | SRS 42 Data: OSM streets and footprints load; coverage evidence confirms enough buildings for the shadow workflow; height-source fields and facility counts exist. SRS 74: OSM-unavailable path is actionable and preloaded mode works; API serves cached GeoJSON only. |
 | 2. Geometry and shadow validation | CRS selection, observed OSM-height -> levels x 3 m -> 6 m hierarchy, solar position, one-building then multiple-building shadow/intersection engine. | SRS 12 / 42 Shadow: one-building test, known timestamp/direction, nearby-street intersection, multiple buildings, five time points. Geospatial CRS/validity and estimated-height provenance tests pass. |
-| 3. Exposure checkpoint | Exposure records/cache for canonical times, time interpolation labels, computation-mode UI. | SRS 60-61 cache/monotonicity/bounds tests. At hour 12 record PASS or activate fallback; SRS 85 Reliability requires visible fallback and a working slider. |
-| 4. Risk and explainability | Ward-level estimated vulnerability with documented distribution, OSM-existing-only cooling access, centralized normalization, risk records, risk map, slider, WHY, and Why-not-the-hottest. | SRS 42 Risk/Dashboard: exposure, vulnerability, cooling, score, map, slider, WHY, and Why-not-the-hottest. SRS 85 Explainability uses actual computed data; estimated/provenance contract tests pass. |
+| 3. Exposure checkpoint | Exposure records/cache for canonical times, time interpolation labels, computation-mode UI, and the 09:00-17:00 planner exposure slider. | SRS 60-61 cache/monotonicity/bounds tests. At hour 12 record PASS or activate fallback; SRS 85 Reliability requires visible fallback and a working slider. |
+| 4. Risk and explainability | Ward-level estimated vulnerability with documented distribution, OSM-existing-only cooling access, centralized normalization, risk records, risk map, WHY, and Why-not-the-hottest. Reuse the Prompt 3 exposure slider rather than rebuilding it. | SRS 42 Risk/Dashboard: exposure, vulnerability, cooling, score, map, slider, WHY, and Why-not-the-hottest. SRS 85 Explainability uses actual computed data; estimated/provenance contract tests pass. |
 | 5. Intervention and impact | Candidates kept separate from existing OSM facilities, constraints, deterministic greedy selection, same-pipeline comparison. | SRS 42 Optimization: resource counts, candidates, deployment, before/after. Unit tests prove generated candidates do not count as existing facilities; effects, marginal benefits, constraints, and no-hardcoded-impact checks pass. |
 | 6. Citizen mobility | Routing graph, actual route alternatives, metrics, and safe stops. | SRS 42 Routing: origin/destination, multiple routes, heat exposure. SRS 69 route-scoring tests; SRS 85 Mobility checks; no fabricated route/stop data. |
 | 7. Grounded Copilot and public-view polish | Hindi public view, template-based structured retrieval/tool answers, fact/safety gate, selected-context display; optional LLM rendering only with a free key in `.env`; responsive accessible UI. | SRS 42 Copilot: platform/risk/route explanations and no invention. SRS 71-72 tests cover existing and intentionally missing facts; tests prove template mode works without an LLM and SRS 85 Public View/Copilot blocks hallucination cases. |

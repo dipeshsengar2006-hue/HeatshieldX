@@ -5,8 +5,7 @@
   const lat = Number(document.body.dataset.lat);
   const lon = Number(document.body.dataset.lon);
   const map = L.map(mapElement, { zoomControl: true }).setView([lat, lon], 15);
-  let shadowLayer;
-  let shadeLayer;
+  let exposureLayer;
 
   // Tiles are optional presentation assets. Cached application data remains usable without them.
   L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
@@ -29,42 +28,48 @@
     if (group.getBounds().isValid()) map.fitBounds(group.getBounds(), { padding: [24, 24] });
   }).catch((error) => console.warn("HeatShield map data is unavailable.", error));
 
-  const shadowStatus = document.querySelector("#shadow-status");
-  const shadowButtons = document.querySelectorAll(".shadow-time");
-  const shadeColor = (fraction) => {
-    const red = Math.round(214 - (fraction * 110));
-    const green = Math.round(69 + (fraction * 90));
-    return `rgb(${red}, ${green}, 78)`;
+  const slider = document.querySelector("#exposure-slider");
+  const timeOutput = document.querySelector("#exposure-time");
+  const statusLabel = document.querySelector("#exposure-status-label");
+  const exposureStatus = document.querySelector("#exposure-status");
+  const modeBadge = document.querySelector("#exposure-mode");
+  const formatTime = (minutes) => `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
+  const exposureColor = (value) => {
+    const red = Math.round(72 + (value * 166));
+    const green = Math.round(141 - (value * 82));
+    return `rgb(${red}, ${green}, 64)`;
   };
 
-  const showShadowCheck = async (canonicalTime) => {
-    if (shadowStatus) shadowStatus.textContent = `Loading cached shadows for ${canonicalTime}…`;
+  const showExposure = async (requestedTime) => {
+    if (exposureStatus) exposureStatus.textContent = `Loading cached exposure for ${requestedTime}...`;
     try {
-      const [shadowResponse, shadeResponse] = await Promise.all([
-        fetch(`/api/shadows/${canonicalTime}/polygons`),
-        fetch(`/api/shadows/${canonicalTime}/shade-fractions`),
-      ]);
-      if (!shadowResponse.ok || !shadeResponse.ok) throw new Error("Cached shadow data is unavailable.");
-      const [shadowData, shadeData] = await Promise.all([shadowResponse.json(), shadeResponse.json()]);
-      if (shadowLayer) map.removeLayer(shadowLayer);
-      if (shadeLayer) map.removeLayer(shadeLayer);
-      shadowLayer = L.geoJSON(shadowData, {
-        style: { color: "#334e68", weight: 0.4, fillColor: "#334e68", fillOpacity: 0.18 },
+      const response = await fetch(`/api/exposure?time=${encodeURIComponent(requestedTime)}`);
+      if (!response.ok) throw new Error("Cached exposure data is unavailable.");
+      const collection = await response.json();
+      if (exposureLayer) map.removeLayer(exposureLayer);
+      exposureLayer = L.geoJSON(collection, {
+        style: (feature) => ({ color: exposureColor(feature.properties.exposure_value), weight: 3.5, opacity: 0.92 }),
       }).addTo(map);
-      shadeLayer = L.geoJSON(shadeData, {
-        style: (feature) => ({ color: shadeColor(feature.properties.shade_fraction), weight: 3.2, opacity: 0.9 }),
-      }).addTo(map);
-      shadowButtons.forEach((button) => button.setAttribute("aria-pressed", String(button.dataset.shadowTime === canonicalTime)));
-      const metadata = shadeData.metadata || {};
-      const estimated = metadata.estimated_height_building_count || 0;
-      if (shadowStatus) shadowStatus.textContent = `${canonicalTime}: geometric shadows loaded; ${estimated} building heights are estimated.`;
+      const metadata = collection.metadata || {};
+      const interpolated = Boolean(metadata.interpolated);
+      if (timeOutput) timeOutput.textContent = requestedTime;
+      if (statusLabel) statusLabel.textContent = interpolated ? "Interpolated / Estimated" : "Modelled";
+      if (modeBadge) {
+        const geometric = metadata.computation_mode === "geometric";
+        modeBadge.textContent = geometric ? "Geometric shadow mode" : "Estimated Exposure Mode";
+        modeBadge.dataset.mode = geometric ? "geometric" : "estimated";
+      }
+      if (exposureStatus) exposureStatus.textContent = interpolated
+        ? `${requestedTime} is linearly interpolated from cached ${metadata.interpolation_lower_time} and ${metadata.interpolation_upper_time} snapshots.`
+        : `${requestedTime} uses a cached ${metadata.computation_mode} exposure snapshot.`;
     } catch (error) {
-      if (shadowStatus) shadowStatus.textContent = "Shadow cache is unavailable. Run `python scripts/precompute_shadows.py`; base streets and buildings remain available.";
-      console.warn("HeatShield shadow validation data is unavailable.", error);
+      if (exposureStatus) exposureStatus.textContent = "Exposure cache is unavailable. Run `python scripts/precompute_exposure.py`; base streets and buildings remain available.";
+      console.warn("HeatShield exposure data is unavailable.", error);
     }
   };
 
-  shadowButtons.forEach((button) => {
-    button.addEventListener("click", () => showShadowCheck(button.dataset.shadowTime));
-  });
+  if (slider) {
+    slider.addEventListener("input", () => showExposure(formatTime(Number(slider.value))));
+    showExposure(formatTime(Number(slider.value)));
+  }
 })();

@@ -49,6 +49,13 @@ class AppConfig(BaseModel):
     shadow_min_solar_elevation_deg: float
     shadow_max_length_m: float
     shadow_computation_mode: Literal["geometric"]
+    exposure_computation_mode: Literal["geometric", "estimated"]
+    temperature_proxy_c: dict[str, float]
+    temperature_proxy_label: str
+    exposure_direct_weight: float = Field(ge=0, le=1)
+    exposure_temperature_weight: float = Field(ge=0, le=1)
+    exposure_duration_factor: float = Field(gt=0)
+    static_fallback_shade_factor: float = Field(ge=0, le=1)
     facility_tag_rules: dict[str, dict[str, tuple[str, ...]]]
     facility_classification_order: tuple[str, ...]
     osm_request_timeout_s: int
@@ -62,9 +69,12 @@ def get_config() -> AppConfig:
     mode = os.getenv("HEATSHIELD_COMPUTATION_MODE", "FULL").upper()
     if mode not in {"FULL", "SIMPLIFIED", "FALLBACK"}:
         raise ValueError("HEATSHIELD_COMPUTATION_MODE must be FULL, SIMPLIFIED, or FALLBACK.")
+    exposure_mode = os.getenv("HEATSHIELD_EXPOSURE_MODE", "geometric").lower()
+    if exposure_mode not in {"geometric", "estimated"}:
+        raise ValueError("HEATSHIELD_EXPOSURE_MODE must be geometric or estimated.")
 
     return AppConfig(
-        version="2026-10-09-prompt-2-geometric-shadows",
+        version="2026-10-09-prompt-3-exposure",
         demo_area=DemoArea(
             name="Rajwada-Sarafa demonstration area",
             city="Indore",
@@ -84,7 +94,8 @@ def get_config() -> AppConfig:
         computation_mode=mode,
         feature_flags={
             "preloaded_mode": True,
-            "shadow_engine": False,
+            "shadow_engine": True,
+            "exposure_engine": True,
             "risk_engine": False,
             "routing": False,
             "copilot": False,
@@ -114,6 +125,13 @@ def get_config() -> AppConfig:
         shadow_min_solar_elevation_deg=1.0,
         shadow_max_length_m=150.0,
         shadow_computation_mode="geometric",
+        exposure_computation_mode=exposure_mode,
+        temperature_proxy_c={"09:00": 33.0, "11:00": 38.0, "13:00": 41.0, "15:00": 42.0, "17:00": 38.0},
+        temperature_proxy_label="Prototype assumption, not observed data or a medical measurement.",
+        exposure_direct_weight=0.5,
+        exposure_temperature_weight=0.5,
+        exposure_duration_factor=1.0,
+        static_fallback_shade_factor=0.5,
         facility_tag_rules={
             "healthcare": {"amenity": ("hospital", "clinic")},
             "water": {

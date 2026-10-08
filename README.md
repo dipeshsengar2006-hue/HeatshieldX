@@ -35,6 +35,18 @@ Asia/Kolkata timezone; it does not run during web requests.
 python scripts/precompute_shadows.py
 ```
 
+## Precompute exposure snapshots
+
+Generate the five cached exposure snapshots after the shadow cache is ready.
+The default is geometric shadow mode. To intentionally generate the explicit
+non-shadow fallback cache, set `HEATSHIELD_EXPOSURE_MODE=estimated` for the
+command; regenerate without that variable to restore the default geometric
+cache.
+
+```powershell
+python scripts/precompute_exposure.py
+```
+
 ## Run locally
 
 ```powershell

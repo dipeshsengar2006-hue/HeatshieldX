@@ -11,13 +11,13 @@
     <header class="site-header">
       <a class="brand" href="/">HeatShield <span>X</span></a>
       <p>Hyperlocal Heat Risk Response</p>
-      <span class="status-pill">Foundation</span>
+      <span class="status-pill">Exposure checkpoint</span>
     </header>
     <main class="planner-shell">
       <section class="intro" aria-labelledby="page-title">
         <p class="eyebrow">Planner dashboard</p>
         <h1 id="page-title">{{ demo_area.name }}</h1>
-        <p>Base map data from OpenStreetMap. Risk, time, and intervention layers are not active yet.</p>
+        <p>Cached streets, buildings, and modelled exposure. Risk and intervention layers are not active yet.</p>
       </section>
       {% if load_error %}
       <section class="notice notice-error" role="alert">{{ load_error }}</section>
@@ -25,25 +25,29 @@
       <section class="map-panel" aria-label="Demo area streets and building footprints">
         <div id="map" aria-label="Map of streets and building footprints"></div>
         <aside class="map-legend" aria-label="Map legend">
-          <span><i class="legend-street"></i> Streets</span>
+          <span><i class="legend-street"></i> Lower exposure</span>
           <span><i class="legend-building"></i> Buildings</span>
+          <span><i class="legend-exposure"></i> Higher exposure</span>
         </aside>
       </section>
-      <section class="shadow-check" aria-labelledby="shadow-check-title">
+      <section class="exposure-control" aria-labelledby="exposure-title">
         <div>
-          <p class="eyebrow">Geometry validation</p>
-          <h2 id="shadow-check-title">Shadow check</h2>
-          <p>Draw cached geometric shadows and street shade fractions for one canonical time.</p>
+          <p class="eyebrow">Modelled street exposure</p>
+          <h2 id="exposure-title">Time of day</h2>
+          <p>Exposure is a bounded prototype model, not a medical measurement.</p>
         </div>
-        <div class="shadow-actions" role="group" aria-label="Shadow check time">
-          {% for time in shadow_times %}
-          <button type="button" class="shadow-time" data-shadow-time="{{ time }}">{{ time }}</button>
-          {% endfor %}
+        <div class="exposure-slider-wrap">
+          <div class="exposure-current"><output id="exposure-time" for="exposure-slider">09:00</output><span id="exposure-status-label">Modelled</span></div>
+          <input id="exposure-slider" type="range" min="540" max="1020" step="30" value="540" aria-label="Exposure time from 09:00 to 17:00">
+          <div class="slider-ticks" aria-hidden="true"><span>09:00</span><span>11:00</span><span>13:00</span><span>15:00</span><span>17:00</span></div>
         </div>
-        <p id="shadow-status" class="shadow-status" aria-live="polite">Choose a time to validate cached shadows.</p>
+        <div class="exposure-meta">
+          <span id="exposure-mode" class="mode-badge" data-mode="{{ exposure_mode }}">Loading exposure mode</span>
+          <p id="exposure-status" class="exposure-status" aria-live="polite">Loading cached exposure.</p>
+        </div>
       </section>
     </main>
-    <footer>Configuration {{ config_version }} · Source: OpenStreetMap contributors</footer>
+    <footer>Configuration {{ config_version }} · Source: © OpenStreetMap contributors</footer>
     <script src="/static/vendor/leaflet.js"></script>
     <script src="/static/js/planner.js"></script>
   </body>

@@ -44,3 +44,16 @@ def load_shadow_snapshot(kind: str, canonical_time: str, config: AppConfig | Non
             "Run `python scripts/precompute_shadows.py` after Prompt 1 cache data is available."
         )
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def load_exposure_snapshot(canonical_time: str, config: AppConfig | None = None) -> dict:
+    """Load one canonical cache-only exposure snapshot."""
+    active_config = config or get_config()
+    slug = canonical_time.replace(":", "-")
+    path = active_config.cache_data_dir / f"exposure_{slug}.geojson"
+    if not path.exists():
+        raise FileNotFoundError(
+            f"Precomputed exposure for {canonical_time} is unavailable at {path}. "
+            "Run `python scripts/precompute_exposure.py` after the required cache data is available."
+        )
+    return json.loads(path.read_text(encoding="utf-8"))
