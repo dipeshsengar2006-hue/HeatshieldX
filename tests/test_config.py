@@ -1,0 +1,13 @@
+from app.config import get_config
+
+
+def test_central_config_contains_prompt_one_and_srs_keys():
+    config = get_config()
+    assert config.demo_area.city == "Indore"
+    assert config.demo_area.radius_m == 500
+    assert config.canonical_times == ("09:00", "11:00", "13:00", "15:00", "17:00")
+    assert config.building_height_per_floor == 3
+    assert config.fallback_building_floors == 2
+    assert config.data_source_metadata["facilities"].startswith("OpenStreetMap")
+    assert config.risk_normalization_method
+    assert config.route_objective_weights

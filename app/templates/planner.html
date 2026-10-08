@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>HeatShield X | Planner</title>
+    <link rel="stylesheet" href="/static/vendor/leaflet.css">
+    <link rel="stylesheet" href="/static/css/base.css">
+  </head>
+  <body data-lat="{{ demo_area.center_lat }}" data-lon="{{ demo_area.center_lon }}">
+    <header class="site-header">
+      <a class="brand" href="/">HeatShield <span>X</span></a>
+      <p>Hyperlocal Heat Risk Response</p>
+      <span class="status-pill">Foundation</span>
+    </header>
+    <main class="planner-shell">
+      <section class="intro" aria-labelledby="page-title">
+        <p class="eyebrow">Planner dashboard</p>
+        <h1 id="page-title">{{ demo_area.name }}</h1>
+        <p>Base map data from OpenStreetMap. Risk, time, and intervention layers are not active yet.</p>
+      </section>
+      {% if load_error %}
+      <section class="notice notice-error" role="alert">{{ load_error }}</section>
+      {% endif %}
+      <section class="map-panel" aria-label="Demo area streets and building footprints">
+        <div id="map" aria-label="Map of streets and building footprints"></div>
+        <aside class="map-legend" aria-label="Map legend">
+          <span><i class="legend-street"></i> Streets</span>
+          <span><i class="legend-building"></i> Buildings</span>
+        </aside>
+      </section>
+    </main>
+    <footer>Configuration {{ config_version }} · Source: OpenStreetMap contributors</footer>
+    <script src="/static/vendor/leaflet.js"></script>
+    <script src="/static/js/planner.js"></script>
+  </body>
+</html>

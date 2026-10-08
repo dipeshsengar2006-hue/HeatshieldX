@@ -3,9 +3,8 @@
 ## Planning basis and constraints
 
 This plan implements, and does not redefine, the HeatShield X Master SRS v2.0.
-`AGENTS.md` was read in full. Its referenced `docs/PROBLEM.md` and
-`docs/PRD.md` are not present in the workspace; this plan therefore treats
-`docs/SRS.md` as the available product source of truth.
+`AGENTS.md`, `docs/SRS.md`, and the prior version of this plan were read in
+full. The SRS is the product source of truth.
 
 Non-negotiable constraints retained throughout this plan:
 
@@ -51,8 +50,14 @@ one, see relevant safe stops, and receive general non-diagnostic heat guidance.
 
 ### MVP boundary
 
-The MVP is a fixed, configurable small demonstration area with cached street
-and building geometry and five independently cached canonical snapshots:
+The preferred MVP demonstration area is an approximately 1 km2 dense area of
+Indore, centred on Rajwada-Sarafa. Prompt 1 must first verify from OSM that its
+boundary contains enough mapped buildings for the shadow workflow. If it does
+not, select another suitably dense, approximately 1 km2 Indore area and record
+the reason, exact boundary, source snapshot, and configuration version.
+
+The MVP uses the resulting fixed, configurable small demonstration area with
+cached street and building geometry and five independently cached canonical snapshots:
 `09:00`, `11:00`, `13:00`, `15:00`, and `17:00`. Intermediate slider values
 may interpolate supported modelled fields only and must be marked Estimated /
 Interpolated. The MVP includes elderly and outdoor-worker vulnerability only.
@@ -107,35 +112,43 @@ before doing so.
 
 ## 3. Ambiguities and missing inputs
 
-1. Which exact demo area should be fixed for the final build (city, boundary,
-   and a suitably small selectable polygon)?
-2. What approved source supplies population and demographic data for that area,
-   including elderly indicators and any outdoor-worker proxy? If unavailable,
-   may the final demo use a documented synthetic/area-level estimate?
-3. What is the approved building-height fallback when OSM `height` and
-   `building:levels` are absent? The SRS default is two floors at 3 m per floor
-   (6 m); confirm whether that default should be used for the selected area.
-4. What data source should supply water points, cooling centres, and other
-   cooling facilities? Are OSM tags sufficient, or is a municipal/curated
-   source available?
-5. Which LLM provider, model, credential path, budget, and privacy terms are
-   approved for the optional HeatShield Copilot? Is a deterministic disabled
-   state acceptable until credentials are available?
-6. Which date, timezone, and representative weather/temperature proxy should
+### Confirmed planning decisions
+
+- **Demo area:** Start with approximately 1 km2 in Indore around Rajwada-Sarafa.
+  Prompt 1 validates OSM building coverage; if inadequate, choose another
+  suitable Indore area and document the substitution.
+- **Demographics:** Use ward-level population/demographic estimates, distributed
+  with transparent configured assumptions. Mark all derived demographic values
+  as **Estimated**; do not imply street-level precision.
+- **Building heights:** Use observed OSM building height first; otherwise OSM
+  levels x 3 m; otherwise 6 m. Every levels-derived or fallback value is marked
+  **Estimated**.
+- **Existing cooling/water facilities:** Only OSM facilities count as existing
+  facilities in cooling-access and safe-stop inputs. Generated intervention
+  candidate sites are simulated future actions only and must never be counted
+  as existing facilities.
+- **Copilot:** Start with template-based grounded answers over structured system
+  data. An LLM is optional; select any provider with an available free key only
+  when needed. Keys are stored only in `.env`, never in source, configuration,
+  the frontend, or documentation.
+
+### Remaining inputs to confirm
+
+1. Which date, timezone, and representative weather/temperature proxy should
    be configured for solar positions and fallback exposure in the demo area?
-7. Which map tile provider and attribution treatment are approved for the
+2. Which map tile provider and attribution treatment are approved for the
    public demo, and must it work without internet connectivity?
-8. What is the exact source/licence and freshness expectation for OSM and
+3. What is the exact source/licence and freshness expectation for OSM and
    demographic/facility data snapshots to be cited in the UI?
-9. Are there known verified heat-safe businesses or shaded public areas for the
+4. Are there known verified heat-safe businesses or shaded public areas for the
    selected area, or should the safe-stop MVP only use source-supported OSM /
    curated facilities?
-10. What general heat-safety text is approved for English and Hindi? It must
+5. What general heat-safety text is approved for English and Hindi? It must
     remain general guidance and must not diagnose.
-11. Are the default intervention inventory examples (2 water points, 1 cooling
+6. Are the default intervention inventory examples (2 water points, 1 cooling
     centre, 2 shade structures) the intended initial UI values, while remaining
     editable by the planner?
-12. Should the final demo use a preloaded snapshot by default even when a live
+7. Should the final demo use a preloaded snapshot by default even when a live
     OSM download succeeds, to maximise reproducibility?
 
 ## 4. Simple architecture and folder structure
@@ -186,6 +199,8 @@ HeatShieldX/
 |- data/
 |  |- raw/                        # Downloaded source snapshots (not secrets)
 |  `- processed/                  # Cached derived records/snapshots
+|- scripts/
+|  `- precompute_demo_area.py     # Writes heavy GIS results to cached files
 |- tests/
 |  |- unit/
 |  |- geospatial/
@@ -199,10 +214,12 @@ HeatShieldX/
 ```
 
 `app/config.py` is the one versioned configuration object/file. It owns:
-`demo_area`, canonical times, building-height values, normalization method and
-class ranges, vulnerability weights, water/cooling radii, access-penalty
-weights, intervention effects, route weights, feature flags, computation mode,
-and data-source metadata. Engines receive this configuration; templates,
+`demo_area` (Rajwada-Sarafa preferred plus its OSM-coverage outcome), canonical
+times, building-height values (3 m per level and 6 m fallback), normalization
+method and class ranges, ward-level demographic distribution assumptions,
+vulnerability weights, water/cooling radii, access-penalty weights,
+intervention effects, route weights, feature flags, computation mode,
+data-source metadata, and optional LLM enablement/provider metadata. Engines receive this configuration; templates,
 JavaScript, and Copilot prompts do not copy any weights. Every output exposes
 data snapshot, configuration version, and code version for reproducibility.
 
@@ -292,9 +309,15 @@ class SafeStop(BaseModel):
 
 Additional contract rules to preserve:
 
-- A building uses the ordered hierarchy actual height -> levels x configured
-  metres-per-floor -> configured fallback floors x metres-per-floor; any
-  non-observed height sets `estimated_flag=True`.
+- A building uses the ordered hierarchy observed OSM `height` -> OSM levels x
+  3 m -> 6 m fallback. Levels-derived and fallback values set
+  `estimated_flag=True` and display **Estimated** with their source/assumption.
+- Ward-level demographic inputs are distributed only with transparent configured
+  assumptions; the resulting elderly/outdoor-worker values are **Estimated**.
+- Existing water/cooling facility records originate only from OSM. Generated
+  intervention candidates remain distinct simulated records and cannot enter
+  existing-facility, cooling-access, or safe-stop calculations until selected
+  in the modelled intervention scenario.
 - `RiskRecord` values are deterministic modelled prioritization values. The
   normalization method is selected once in config; the default is min-max on
   the selected scope with `50` when `max_raw == min_raw`, clipped to `[0,100]`.
@@ -315,7 +338,7 @@ source of truth.
 | Surface | Route | Methods | Purpose |
 | --- | --- | --- | --- |
 | Planner | `/planner` | GET | Server-rendered map-first planner dashboard. |
-| Planner | `/api/planner/area` | GET | Fixed demo-area metadata, available data sources, and active configuration/mode. |
+| Planner | `/api/planner/area` | GET | Fixed demo-area metadata, OSM-coverage validation result, available data sources, and active configuration/mode. |
 | Planner | `/api/planner/snapshots/{time}` | GET | Cached or permitted interpolated street risk/exposure map snapshot. |
 | Planner | `/api/planner/segments/{segment_id}` | GET | Selected street risk, drivers, vulnerability, cooling access, and provenance for WHY. |
 | Planner | `/api/planner/compare/hottest` | GET | Hottest versus highest-human-risk comparison from computed records. |
@@ -326,13 +349,14 @@ source of truth.
 | Citizen | `/api/public/routes` | POST | Validate origin/destination; generate FASTEST, HEAT-AWARE, and BALANCED route comparisons. |
 | Citizen | `/api/public/routes/{route_id}/stops` | GET | Source-supported safe stops relevant to the selected actual route. |
 | Citizen | `/api/public/guidance` | GET | Approved general, non-diagnostic heat guidance in English/Hindi. |
-| Copilot | `/api/copilot/chat` | POST | Intent -> structured retrieval/engine -> facts/assumptions -> LLM -> safety/fact gate. |
+| Copilot | `/api/copilot/chat` | POST | Intent -> structured retrieval/engine -> template-based grounded answer; optionally LLM natural-language rendering -> safety/fact gate. |
 | Copilot | `/api/copilot/context` | GET | Visible selected entity/context used by the grounded conversation. |
 | Platform | `/health` | GET | Liveness/readiness, active computation mode, and non-sensitive data availability. |
 
 The Copilot route returns **"Data unavailable for this area."** when required
-facts are absent. It does not calculate independent scores, routes, distances,
-ratings, or impact.
+facts are absent. Template-based responses are the initial implementation; an
+LLM may be enabled only when a free provider key is available in `.env`. It
+does not calculate independent scores, routes, distances, ratings, or impact.
 
 ## 7. Development phases: 36-hour delivery schedule
 
@@ -341,31 +365,35 @@ This sequence follows SRS section 43, P0/P1/P2 ordering, the mandatory
 
 | Hours | Priority | Reviewable result and gate |
 | --- | --- | --- |
-| 0-4 | P0 | Skeleton, central config, fixed demo-area setup, OSM/preloaded-data path, basic Leaflet map, street/building extraction. Gate: OSM failure displays an actionable error and preloaded demo mode works when configured. |
-| 4-8 | P0 | Building-height hierarchy, projected CRS policy, one-building shadow test, solar-position and expected-direction validation. Gate: height estimates/provenance and geospatial unit tests pass. |
+| 0-4 | P0 | Skeleton, central config, Rajwada-Sarafa (~1 km2) OSM building-coverage check, documented substitute-area selection if needed, OSM/preloaded-data path, street segmentation with stable IDs, OSM water/cooling count report, cached precompute script, basic Leaflet map, and responsive design-system shell. Gate: sufficient building coverage is evidenced or a substitute area is documented; OSM failure displays an actionable error and preloaded demo mode works when configured. |
+| 4-8 | P0 | OSM-height -> levels x 3 m -> 6 m hierarchy, projected CRS policy, one-building shadow test, solar-position and expected-direction validation. Gate: estimated height/provenance and geospatial unit tests pass. |
 | 8-12 | P0 | Multiple-building shadows, street intersections, five canonical timestamps, exposure calculation/caching. **Hard checkpoint:** reliable geometric results -> `FULL`; otherwise activate `SIMPLIFIED` if prepared or `FALLBACK` (temperature proxy x static shade factor x exposure duration), display **Estimated Exposure Mode**, and keep the slider functional. |
-| 12-20 | P0 | Vulnerability, cooling access, risk pipeline, map snapshot endpoint, time slider, WHY panel, and provenance/status display. Gate: P0 data/risk/dashboard acceptance checks pass in the active mode. |
+| 12-20 | P0 | Ward-level estimated vulnerability with transparent distribution, OSM-existing-only cooling/water access, risk pipeline, map snapshot endpoint, time slider, WHY panel, Why-not-the-hottest, and provenance/status display. Gate: P0 data/risk/dashboard acceptance checks pass in the active mode. |
 | 20-27 | P0 | Intervention candidates, editable resource limits, deterministic greedy optimizer, and same-pipeline before/**Modelled Impact** after. Gate: P0 optimization checks and constraint tests pass. |
-| 27-31 | P1 | Why-not-the-hottest, graph routing, FASTEST/HEAT-AWARE/BALANCED comparison, and safe-stop logic using actual data. Gate: P1 route comparison checks pass without fabricated routes/stops. |
-| 31-34 | P1 then P2 | Hindi public view (P1); only if stable, grounded Copilot and optional labelled sponsored flag (P2); UI/accessibility polish. Gate: Copilot grounding tests block unavailable facts. |
-| 34-36 | Freeze | **No new features.** Fix defects, run the full suite, rehearse the 3-minute narrative, prepare PPT and screenshots/video/demo-data backup. Gate: end-to-end fixed-area demo completes without hidden manual steps. |
+| 27-31 | P1 | Graph routing, FASTEST/HEAT-AWARE/BALANCED comparison, and safe-stop logic using actual data. Gate: P1 route comparison checks pass without fabricated routes/stops. |
+| 31-34 | P1 then P2 | Hindi public view (P1); only if stable, template-based grounded Copilot, then optional LLM rendering with a free-key provider kept in `.env`, and optional labelled sponsored flag (P2); UI/accessibility polish. Gate: Copilot grounding tests block unavailable facts. |
+| 34-36 | Freeze | **No new features.** Fix defects, run the full suite, verify local-run/deployment decision, rehearse the 3-minute narrative, and prepare PPT plus a backup demo (preloaded cache and screenshots/video). Gate: end-to-end fixed-area demo completes without hidden manual steps. |
 
 ## 8. Prompt-by-prompt implementation plan
 
 Each later build prompt is one reviewable phase and must end with
 implemented/tested/failed/assumptions/blockers reporting. Never proceed past a
 failed gate without fixing it or explicitly activating the SRS fallback.
+Prompt 1 establishes the shared CSS variables and responsive layout shell;
+every later prompt must preserve those design-system rules and UI consistency.
+Heavy GIS work runs through the precompute script and writes cache files; API
+routes serve cached results rather than triggering full GIS processing.
 
 | Prompt / phase | Scope | Tests and acceptance evidence |
 | --- | --- | --- |
-| 1. Foundation and data loading | App skeleton, one central config, fixed demo area, data acquisition/preload, base planner map. | SRS 42 Data: OSM streets and footprints load; height-source fields exist. SRS 74: OSM-unavailable path is actionable and preloaded mode works. |
-| 2. Geometry and shadow validation | CRS selection, height hierarchy, solar position, one-building then multiple-building shadow/intersection engine. | SRS 12 / 42 Shadow: one-building test, known timestamp/direction, nearby-street intersection, multiple buildings, five time points. Geospatial CRS/validity tests pass. |
+| 1. Foundation and data loading | App skeleton, one central config, Rajwada-Sarafa OSM building-coverage validation, documented substitute area if required, street segmentation with stable IDs, OSM water/cooling facility loading and count report, raw/cache precompute script, base planner map, and responsive design-system shell. | SRS 42 Data: OSM streets and footprints load; coverage evidence confirms enough buildings for the shadow workflow; height-source fields and facility counts exist. SRS 74: OSM-unavailable path is actionable and preloaded mode works; API serves cached GeoJSON only. |
+| 2. Geometry and shadow validation | CRS selection, observed OSM-height -> levels x 3 m -> 6 m hierarchy, solar position, one-building then multiple-building shadow/intersection engine. | SRS 12 / 42 Shadow: one-building test, known timestamp/direction, nearby-street intersection, multiple buildings, five time points. Geospatial CRS/validity and estimated-height provenance tests pass. |
 | 3. Exposure checkpoint | Exposure records/cache for canonical times, time interpolation labels, computation-mode UI. | SRS 60-61 cache/monotonicity/bounds tests. At hour 12 record PASS or activate fallback; SRS 85 Reliability requires visible fallback and a working slider. |
-| 4. Risk and explainability | Vulnerability, cooling access, centralized normalization, risk records, risk map, slider, WHY. | SRS 42 Risk/Dashboard: exposure, vulnerability, cooling, score, map, slider, WHY. SRS 85 Explainability uses actual computed data; provenance contract tests pass. |
-| 5. Intervention and impact | Candidates, constraints, deterministic greedy selection, same-pipeline comparison. | SRS 42 Optimization: resource counts, candidates, deployment, before/after. Unit tests cover effects, marginal benefits, constraints, no hardcoded impact; SRS 85 Planning passes. |
-| 6. Citizen mobility | Why-not-hottest, routing graph, actual route alternatives, metrics, safe stops, Hindi public view. | SRS 42 Routing: origin/destination, multiple routes, heat exposure. SRS 69 route-scoring tests; SRS 85 Mobility/Public view checks; no fabricated route/stop data. |
-| 7. Grounded Copilot and polish | Structured retrieval/tool pipeline, fact/safety gate, selected-context display, responsive accessible UI. | SRS 42 Copilot: platform/risk/route explanations and no invention. SRS 71-72 tests cover existing and intentionally missing facts; SRS 85 blocks hallucination cases. |
-| 8. Freeze and demo | Regression, failure modes, reproducibility, observability, demo rehearsal and backup. | SRS 77 unit/geospatial/integration/fallback/E2E/UI smoke suite; SRS 85 full definition of done; 3-minute SRS 51 narrative works without hidden manual steps. |
+| 4. Risk and explainability | Ward-level estimated vulnerability with documented distribution, OSM-existing-only cooling access, centralized normalization, risk records, risk map, slider, WHY, and Why-not-the-hottest. | SRS 42 Risk/Dashboard: exposure, vulnerability, cooling, score, map, slider, WHY, and Why-not-the-hottest. SRS 85 Explainability uses actual computed data; estimated/provenance contract tests pass. |
+| 5. Intervention and impact | Candidates kept separate from existing OSM facilities, constraints, deterministic greedy selection, same-pipeline comparison. | SRS 42 Optimization: resource counts, candidates, deployment, before/after. Unit tests prove generated candidates do not count as existing facilities; effects, marginal benefits, constraints, and no-hardcoded-impact checks pass. |
+| 6. Citizen mobility | Routing graph, actual route alternatives, metrics, and safe stops. | SRS 42 Routing: origin/destination, multiple routes, heat exposure. SRS 69 route-scoring tests; SRS 85 Mobility checks; no fabricated route/stop data. |
+| 7. Grounded Copilot and public-view polish | Hindi public view, template-based structured retrieval/tool answers, fact/safety gate, selected-context display; optional LLM rendering only with a free key in `.env`; responsive accessible UI. | SRS 42 Copilot: platform/risk/route explanations and no invention. SRS 71-72 tests cover existing and intentionally missing facts; tests prove template mode works without an LLM and SRS 85 Public View/Copilot blocks hallucination cases. |
+| 8. Freeze, local run, and demo | Regression, failure modes, reproducibility, local-run/deployment decision, demo rehearsal, preloaded-cache backup, and screenshots/video backup. | SRS 77 unit/geospatial/integration/fallback/E2E/UI smoke suite; SRS 85 full definition of done; local run instructions work and the 3-minute SRS 51 narrative can run from preloaded cache without hidden manual steps. |
 
 ## 9. Top technical risks and mitigations
 
@@ -375,8 +403,9 @@ failed gate without fixing it or explicitly activating the SRS fallback.
 | Shadow geometry is wrong because of geographic CRS, solar direction, invalid polygons, or performance | Reproject to a suitable local projected CRS before metres/intersections; validate one building, timestamp, direction, street intersection, then multiple buildings; repair/skip invalid geometry with a logged reason. Enforce the 12-hour pass/fallback decision. |
 | Full shadow processing is too slow or unreliable | Cache geometry and five canonical snapshots. Use Level 1 Full, Level 2 Simplified precomputed exposure, or Level 3 Fallback exactly as defined. Clearly show **Estimated Exposure Mode** for fallback and do not conceal the failure. |
 | Routing graph is disconnected or route metrics conflict with risk data | Build routing from the same street-segment graph and cached exposure snapshots; validate origin/destination snapping; show a route-generation error rather than inventing a route; test FASTEST/HEAT-AWARE/BALANCED scoring. |
-| Demographic, height, or facility coverage is incomplete | Apply only the SRS source hierarchy; set estimated flags/provenance; document spatial assumptions; use unavailable coverage in access calculations rather than inventing facilities; never present precise street-level demographics as fact. |
-| Copilot hallucinates or becomes an alternate decision engine | Retrieve actual structured records, call deterministic tools, include facts and assumptions in context, apply post-generation fact/safety gate, return **"Data unavailable for this area."** when facts are missing, and disable gracefully if the API is unavailable. |
+| Rajwada-Sarafa has insufficient OSM building coverage | Make it the first Prompt 1 check. If coverage is insufficient for multiple-building shadow processing, select another dense ~1 km2 Indore area and document the evidence/reason in configuration and demo materials. |
+| Demographic, height, or facility coverage is incomplete | Use ward-level transparent estimates for demographics; use OSM height -> levels x 3 m -> 6 m for buildings; mark all derived values **Estimated** with provenance. Only OSM facilities count as existing; use unavailable coverage rather than inventing a facility or treating a candidate as existing. |
+| Copilot hallucinates or becomes an alternate decision engine | Start with deterministic template-based answers from structured records. If an LLM is enabled, retrieve actual data, apply a fact/safety gate, use a free-provider key from `.env` only, return **"Data unavailable for this area."** when facts are missing, and disable gracefully if unavailable. |
 | Configuration/weight drift changes results between engines or UI | One versioned config file only; include configuration version in records/logs; do not copy weights into JavaScript, templates, or prompts; regression-test deterministic outputs. |
 | Demo failure due to network or late feature additions | Keep precomputed assets/snapshots and screenshots/video backup; feature freeze at hour 34; final two hours only test, fix, rehearse, and package evidence. |
 
@@ -404,8 +433,11 @@ revised:
 - Extra vulnerability groups beyond elderly and outdoor workers in the MVP.
 - Any new feature during hours 34-36.
 
-## Pre-implementation decisions needed
+## Remaining pre-implementation inputs
 
-Before implementation, resolve at least the demo-area/data-source choices in
-Section 3 and the Copilot provider decision. Until then, use no unapproved
-facts and do not begin application-code implementation.
+The demo area, demographic approach, building-height hierarchy, OSM-only
+existing-facility rule, and template-first Copilot approach are decided. Before
+implementation, resolve the remaining date/time, map-tile, data-freshness,
+safe-stop, heat-guidance, resource-default, and preload choices in Section 3.
+Use no unapproved facts. When an optional LLM is later enabled, keep its chosen
+free-provider key solely in `.env`.

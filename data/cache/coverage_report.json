@@ -1,0 +1,12 @@
+{
+  "demo_area": "Rajwada-Sarafa demonstration area",
+  "streets": 940,
+  "buildings": 3793,
+  "buildings_with_height_or_levels_tags": 0,
+  "water_facilities": 0,
+  "cooling_facilities": 36,
+  "minimum_buildings_for_shadow": 25,
+  "shadow_ready": true,
+  "metric_crs": "EPSG:32643",
+  "config_version": "2026-10-09-prompt-1"
+}

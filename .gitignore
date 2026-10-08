@@ -1,0 +1,9 @@
+.env
+__pycache__/
+.pytest_cache/
+*.py[cod]
+/data/raw/
+/cache/
+
+# Keep precomputed demo assets versioned for the offline/preloaded demo.
+!/data/cache/
