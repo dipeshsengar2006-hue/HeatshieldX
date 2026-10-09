@@ -5,15 +5,18 @@ from __future__ import annotations
 import json
 import logging
 import math
+import re
 import time
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
+from difflib import SequenceMatcher
 from heapq import heappop, heappush
 from typing import Any, Callable
 
 import geopandas as gpd
 import networkx as nx
 from shapely.geometry import LineString, Point, shape
+from shapely.ops import nearest_points
 
 from app.config import AppConfig, get_config
 from app.i18n import CITIZEN_EN
@@ -568,24 +571,82 @@ def route_request(origin: tuple[float, float], destination: tuple[float, float],
     return response
 
 
-def search_places(query: str, config: AppConfig | None = None, limit: int = 10) -> list[dict[str, Any]]:
-    """Search only source-provided names in the local cache; no external geocoder is used."""
+def normalize_place_name(value: str) -> str:
+    """Normalize user and OSM names identically for autocomplete and routing."""
+    value = value.casefold().replace("&", " and ")
+    value = re.sub(r"[^\w]+", " ", value, flags=re.UNICODE)
+    tokens = value.split()
+    initials: list[str] = []
+    index = 0
+    while index < len(tokens):
+        if len(tokens[index]) == 1 and tokens[index].isascii() and tokens[index].isalpha():
+            end = index
+            while end < len(tokens) and len(tokens[end]) == 1 and tokens[end].isascii() and tokens[end].isalpha():
+                end += 1
+            if end - index > 1:
+                initials.append("".join(tokens[index:end]))
+                index = end
+                continue
+        initials.append(tokens[index])
+        index += 1
+    token_map = {"rd": "road", "marg": "road"}
+    filler = {"the", "please", "route", "go", "from", "to", "via"}
+    return " ".join(token_map.get(token, token) for token in initials if token not in filler)
+
+
+def ranked_place_matches(
+    query: str,
+    config: AppConfig | None = None,
+    limit: int = 10,
+) -> list[tuple[dict[str, Any], float]]:
+    """Rank cached OSM street/building/facility names without external geocoding."""
     active_config = config or get_config()
-    needle = query.strip().casefold()
-    if not needle:
+    normalized_query = normalize_place_name(query)
+    if not normalized_query:
         return []
-    records: list[dict[str, Any]] = []
+    query_tokens = set(normalized_query.split())
+    threshold = active_config.copilot_place_fuzzy_threshold
+    matched: list[tuple[dict[str, Any], float]] = []
+
+    def add_match(place_type: str, place_id: Any, name: Any, geometry_data: Any) -> None:
+        if not isinstance(name, str) or not name.strip() or geometry_data is None:
+            return
+        normalized_name = normalize_place_name(name)
+        if not normalized_name:
+            return
+        if normalized_name == normalized_query:
+            score = 1.0
+        elif normalized_name.startswith(normalized_query) or normalized_query.startswith(normalized_name):
+            score = 0.82 + 0.06 * SequenceMatcher(None, normalized_query, normalized_name).ratio()
+        elif query_tokens.issubset(set(normalized_name.split())):
+            coverage = len(query_tokens) / max(len(set(normalized_name.split())), 1)
+            score = 0.64 + 0.06 * coverage
+        else:
+            similarity = SequenceMatcher(None, normalized_query, normalized_name).ratio()
+            if similarity < threshold:
+                return
+            score = 0.40 + 0.05 * similarity
+        geometry = shape(geometry_data)
+        if place_type == "street":
+            point = geometry.interpolate(0.5, normalized=True)
+        else:
+            point = geometry.centroid
+        record = {
+            "place_type": place_type,
+            "place_id": place_id,
+            "name": name.strip(),
+            "location": {"type": "Point", "coordinates": [point.x, point.y]},
+        }
+        matched.append((record, score))
+
     for feature in load_cached_geojson("streets", active_config).get("features", []):
         properties = feature.get("properties", {})
         try:
             name = json.loads(properties.get("road_metadata", "{}") or "{}").get("name")
         except (TypeError, json.JSONDecodeError):
             name = None
-        if not isinstance(name, str) or not name.strip() or needle not in name.casefold():
-            continue
-        geometry = shape(feature["geometry"])
-        point = geometry.interpolate(0.5, normalized=True)
-        records.append({"place_type": "street", "place_id": properties["segment_id"], "name": name.strip(), "location": {"type": "Point", "coordinates": [point.x, point.y]}})
+        if name and properties.get("segment_id"):
+            add_match("street", properties["segment_id"], name, feature.get("geometry"))
     for source_name, place_type, id_key in (("buildings", "building", "building_id"), ("facilities", "amenity", "facility_id")):
         try:
             features = load_cached_geojson(source_name, active_config).get("features", [])
@@ -593,13 +654,61 @@ def search_places(query: str, config: AppConfig | None = None, limit: int = 10) 
             features = []
         for feature in features:
             properties = feature.get("properties", {})
-            name = properties.get("name")
-            if not isinstance(name, str) or not name.strip() or needle not in name.casefold():
-                continue
-            geometry = shape(feature["geometry"])
-            point = geometry.centroid
-            records.append({"place_type": place_type, "place_id": properties.get(id_key), "name": name.strip(), "location": {"type": "Point", "coordinates": [point.x, point.y]}})
-    deduplicated: dict[tuple[str, str], dict[str, Any]] = {}
-    for record in records:
-        deduplicated.setdefault((record["place_type"], record["name"].casefold()), record)
-    return sorted(deduplicated.values(), key=lambda item: (item["name"].casefold(), item["place_type"], str(item["place_id"])))[:limit]
+            add_match(place_type, properties.get(id_key), properties.get("name"), feature.get("geometry"))
+
+    deduplicated: dict[tuple[str, str], tuple[dict[str, Any], float]] = {}
+    for record, score in matched:
+        key = (record["place_type"], normalize_place_name(record["name"]))
+        if key not in deduplicated or score > deduplicated[key][1]:
+            deduplicated[key] = (record, score)
+    return sorted(
+        deduplicated.values(),
+        key=lambda result: (-result[1], result[0]["name"].casefold(), result[0]["place_type"], str(result[0]["place_id"])),
+    )[:limit]
+
+
+def search_places(query: str, config: AppConfig | None = None, limit: int = 10) -> list[dict[str, Any]]:
+    """Return the same cache-only autocomplete records, ordered by normalized relevance."""
+    return [record for record, _score in ranked_place_matches(query, config, limit)]
+
+
+def nearest_named_place(
+    latitude: float,
+    longitude: float,
+    config: AppConfig | None = None,
+    max_distance_m: float = 150,
+) -> tuple[str, float] | None:
+    """Find the nearest named street, building, or facility in the cached place data."""
+    active_config = config or get_config()
+    origin = Point(longitude, latitude)
+    best: tuple[str, float] | None = None
+
+    def consider(name: Any, geometry_data: Any) -> None:
+        nonlocal best
+        if not isinstance(name, str) or not name.strip() or geometry_data is None:
+            return
+        geometry = shape(geometry_data)
+        nearest, _ = nearest_points(origin, geometry)
+        lat1, lat2 = math.radians(latitude), math.radians(nearest.y)
+        delta_lat = lat2 - lat1
+        delta_lon = math.radians(nearest.x - longitude)
+        haversine = math.sin(delta_lat / 2) ** 2 + math.cos(lat1) * math.cos(lat2) * math.sin(delta_lon / 2) ** 2
+        distance_m = 6_371_000 * 2 * math.asin(min(1.0, math.sqrt(haversine)))
+        if distance_m <= max_distance_m and (best is None or distance_m < best[1]):
+            best = (name.strip(), distance_m)
+
+    for feature in load_cached_geojson("streets", active_config).get("features", []):
+        properties = feature.get("properties", {})
+        try:
+            name = json.loads(properties.get("road_metadata", "{}") or "{}").get("name")
+        except (TypeError, json.JSONDecodeError):
+            name = None
+        consider(name, feature.get("geometry"))
+    for source_name in ("buildings", "facilities"):
+        try:
+            features = load_cached_geojson(source_name, active_config).get("features", [])
+        except FileNotFoundError:
+            features = []
+        for feature in features:
+            consider(feature.get("properties", {}).get("name"), feature.get("geometry"))
+    return best

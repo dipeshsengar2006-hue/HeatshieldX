@@ -89,6 +89,8 @@ class AppConfig(BaseModel):
     osm_request_timeout_s: int
     raw_data_dir: Path
     cache_data_dir: Path
+    copilot_place_fuzzy_threshold: float = Field(default=0.82, ge=0, le=1)
+    copilot_place_match_margin: float = Field(default=0.12, ge=0, le=1)
 
 
 @lru_cache(maxsize=1)

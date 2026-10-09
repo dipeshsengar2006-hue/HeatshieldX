@@ -18,7 +18,8 @@ from app.repositories.cache import load_cached_geojson, load_risk_snapshot
 from app.services.copilot_templates import COPILOT_LABELS, COPILOT_TEMPLATES
 from app.services.explainability_engine import explain_segment_snapshot
 from app.services.intervention_engine import get_plan, optimize_resources
-from app.services.routing_engine import RoutingError, route_request, search_places
+from app.services.routing_engine import RoutingError, nearest_named_place, ranked_place_matches, route_request
+from shapely.geometry import shape
 
 
 LOGGER = logging.getLogger(__name__)
@@ -83,6 +84,53 @@ def _source(source_type: str, identifier: Any, label: str) -> dict[str, str]:
     return {"type": source_type, "id": str(identifier), "label": label}
 
 
+def _duration_label(value: Any, language: str) -> str:
+    minutes = _format_number(value, 1)
+    if language == "hi":
+        unit = "मिनट"
+    else:
+        unit = "minute" if float(value) == 1 else "minutes"
+    return f"{minutes} {unit}"
+
+
+def _recommendation_text(recommendation: dict[str, Any], language: str) -> str:
+    text = _citizen(language, recommendation["message_id"], **recommendation["message_params"])
+    minutes = recommendation["message_params"].get("minutes")
+    if language == "en" and minutes == 1:
+        text = text.replace("1 minutes", "1 minute")
+    return text
+
+
+def _resource_name(resource_type: str, count: int, language: str) -> str:
+    labels = {
+        "en": {
+            "water_points": ("water point", "water points"),
+            "cooling_centres": ("cooling centre", "cooling centres"),
+            "shade_structures": ("shade structure", "shade structures"),
+        },
+        "hi": {
+            "water_points": ("पानी का स्थान", "पानी के स्थान"),
+            "cooling_centres": ("ठंडक केंद्र", "ठंडक केंद्र"),
+            "shade_structures": ("छाया संरचना", "छाया संरचनाएँ"),
+        },
+    }
+    return labels[language][resource_type][0 if count == 1 else 1]
+
+
+def _unnamed_street_label(
+    identifier: str,
+    latitude: float | None,
+    longitude: float | None,
+    language: str,
+    config: AppConfig,
+) -> str:
+    if latitude is not None and longitude is not None:
+        nearby = nearest_named_place(latitude, longitude, config, max_distance_m=150)
+        if nearby is not None:
+            return _template(language, "unnamed_street_near", name=nearby[0])
+    return _template(language, "unnamed_street_id", id=identifier)
+
+
 def _empty_result(language: str, intent: str, answer: str | None = None) -> dict[str, Any]:
     return {
         "answer": answer or _template(language, "unavailable"),
@@ -99,35 +147,34 @@ def _empty_result(language: str, intent: str, answer: str | None = None) -> dict
 
 def _parse_place_pair(message: str) -> tuple[str, str] | None:
     patterns = (
-        r"\bfrom\s+(.+?)\s+to\s+(.+?)(?:[?.!,]|$)",
+        r"^\s*(.+?)\s*(?:->|→)\s*(.+?)\s*[?.!,]*$",
+        r"^\s*(?:(?:please\s+)?(?:i\s+want\s+to\s+)?(?:go\s+)?(?:the\s+)?route\s+from\s+|(?:please\s+)?(?:i\s+want\s+to\s+)?(?:go\s+)?from\s+|(?:please\s+)?from\s+)(.+?)\s+to\s+(.+?)(?:\s+route)?\s*[?.!,]*$",
+        r"^\s*(.+?)\s+to\s+(.+?)(?:\s+route)?\s*[?.!,]*$",
         r"^\s*(.+?)\s+se\s+(.+?)\s+(?:jaana|jana)(?:\s+hai)?\s*[?.!]*$",
+        r"^\s*(.+?)\s+se\s+(.+?)\s+tak\s*[?.!]*$",
         r"^\s*(.+?)\s+से\s+(.+?)\s+(?:जाना\s+है|जाएँ|जाए)\s*[?.!।]*$",
+        r"^\s*(.+?)\s+से\s+(.+?)\s+तक\s*[?.!।]*$",
     )
     for pattern in patterns:
         match = re.search(pattern, message.strip(), flags=re.IGNORECASE)
         if match:
             start, end = (part.strip(" \t,.;:!?।") for part in match.groups())
+            start = re.sub(r"^(?:please\s+|i\s+want\s+to\s+|go\s+|the\s+)+", "", start, flags=re.IGNORECASE)
+            end = re.sub(r"\s+(?:please|route)$", "", end, flags=re.IGNORECASE)
             if start and end:
                 return start, end
     return None
 
 
 def _resolve_place(query: str, config: AppConfig) -> list[dict[str, Any]]:
-    matches = search_places(query, config, limit=12)
-    if not matches:
-        for token in re.findall(r"[\w.]+", query, flags=re.UNICODE):
-            if len(token.strip(".")) < 2:
-                continue
-            matches = search_places(token, config, limit=12)
-            if matches:
-                break
-    exact = [item for item in matches if item["name"].casefold() == query.casefold()]
-    if not exact and matches:
-        normalized_query = re.sub(r"[^\w]", "", query.casefold(), flags=re.UNICODE)
-        normalized = [item for item in matches if re.sub(r"[^\w]", "", item["name"].casefold(), flags=re.UNICODE) == normalized_query]
-        if normalized:
-            exact = normalized
-    return exact or matches
+    ranked = ranked_place_matches(query, config, limit=12)
+    if not ranked:
+        return []
+    best_score = ranked[0][1]
+    margin = config.copilot_place_match_margin
+    if len(ranked) == 1 or best_score - ranked[1][1] >= margin:
+        return [ranked[0][0]]
+    return [record for record, _score in ranked[:3]]
 
 
 def _resolve_endpoints(message: str, context: dict[str, Any], config: AppConfig) -> tuple[Any, Any, str, str, list[dict[str, str]], dict[str, Any]] | dict[str, Any]:
@@ -212,7 +259,19 @@ def _risk_explanation(segment_id: str, time_value: str) -> dict[str, Any] | None
     payload = explain_segment_snapshot(snapshot, segment_id)
     if payload is None:
         return None
-    payload["street"]["street_name"] = _street_name(payload["street"]["directed_segment_ids"])
+    street_name = _street_name(payload["street"]["directed_segment_ids"])
+    payload["street"]["street_name"] = street_name
+    if not street_name:
+        target = next((
+            feature for feature in snapshot.get("features", [])
+            if segment_id == feature.get("properties", {}).get("segment_id")
+            or segment_id in feature.get("properties", {}).get("directed_segment_ids", [])
+        ), None)
+        geometry = shape(target["geometry"]) if target else None
+        if geometry is not None:
+            point = geometry.centroid
+            nearest = nearest_named_place(point.y, point.x, get_config(), max_distance_m=150)
+            payload["street"]["nearest_named_place"] = nearest[0] if nearest else None
     payload["requested_time"] = time_value
     return payload
 
@@ -271,13 +330,13 @@ def _render_route_result(route_result: dict[str, Any], language: str, config: Ap
     for route in route_result["routes"]:
         routes.append(_template(language, "route_item",
             name=route["route_name"],
-            minutes=_format_number(route["time_minutes"], 1),
+            duration=_duration_label(route["time_minutes"], language),
             distance=_format_number(route["distance_m"], 1),
             heat=_format_number(route["modelled_heat_exposure"], 3),
             shade=_format_number(route["weighted_shade_percent"], 1),
         ))
     rec = route_result["recommendation"]
-    recommendation = _citizen(language, rec["message_id"], **rec["message_params"])
+    recommendation = _recommendation_text(rec, language)
     answer = _template(language, "route_summary",
         origin=route_result["origin_name"],
         destination=route_result["destination_name"],
@@ -301,7 +360,7 @@ def _route_context_result(message: str, context: dict[str, Any], language: str, 
     if retrieved.get("unavailable"):
         return _empty_result(language, "route_assistant")
     if retrieved.get("ambiguous"):
-        language_matches = [item["name"] for item in retrieved["ambiguous"]]
+        language_matches = [f"{item['role'].title()}: {item['name']}" for item in retrieved["ambiguous"]]
         return {
             "answer": _template(language, "route_ambiguous", matches="; ".join(language_matches)),
             "language": language, "intent": "route_assistant", "mode": "template", "data_unavailable": False,
@@ -375,7 +434,12 @@ def _risk_result(segment_id: str | None, time_value: str | None, language: str) 
     if not payload:
         return _empty_result(language, "risk_explanation")
     street = payload["street"]
-    label = street["street_name"] or street["canonical_street_key"]
+    if street["street_name"]:
+        label = street["street_name"]
+    elif street.get("nearest_named_place"):
+        label = _template(language, "unnamed_street_near", name=street["nearest_named_place"])
+    else:
+        label = _template(language, "unnamed_street_id", id=street["canonical_street_key"])
     driver_lines = [_template(language, "risk_driver",
         label=COPILOT_LABELS[language]["drivers"].get(item["id"], item["label"]),
         level=COPILOT_LABELS[language]["levels"].get(item["level"], item["level"]),
@@ -517,15 +581,22 @@ def _planner_result(message: str, context: dict[str, Any], language: str, config
             return _empty_result(language, "planner_assistant")
     priorities = []
     priority_facts = []
+    priority_sources = []
     for item in plan.get("priorities", []):
-        place = item.get("street_name") or item.get("street_canonical_key")
+        street_id = str(item.get("street_canonical_key") or item.get("candidate_id") or "unknown")
+        place = item.get("street_name") or _unnamed_street_label(
+            street_id, item.get("lat"), item.get("lon"), language, config,
+        )
+        requested_count = int(plan.get("requested_resources", {}).get(item["type"], 0))
+        kind = _resource_name(item["type"], requested_count, language)
         share = round(float(item.get("share_of_total_reduction", 0)) * 100, 1)
-        priorities.append(_template(language, "planner_priority", number=item["priority"], kind=COPILOT_LABELS[language]["resource_types"][item["type"]], place=place, share=_format_number(share, 1)))
+        priorities.append(_template(language, "planner_priority", number=item["priority"], kind=kind, place=place, share=_format_number(share, 1)))
         priority_facts.append({
-            "priority": item["priority"], "type": item["type"], "place": place,
+            "priority": item["priority"], "type": item["type"], "place": place, "street_id": street_id,
             "share_of_total_reduction_percent": share,
             "marginal_benefit": round(float(item["marginal_benefit"]), 3),
         })
+        priority_sources.append(_source("street", street_id, place))
     selected_metrics: dict[str, Any] = {}
     for name in ("high_risk_vulnerable_exposure", "intervention_coverage", "water_coverage", "cooling_coverage"):
         metric = plan.get("metrics", {}).get(name)
@@ -534,24 +605,31 @@ def _planner_result(message: str, context: dict[str, Any], language: str, config
                 "before": metric.get("before"), "modelled_after": metric.get("modelled_after"),
                 "delta": metric.get("delta"), "label": metric.get("label"),
             }
+    def metric_value(name: str, value: Any) -> str:
+        if name.endswith("coverage"):
+            return f"{_format_number(round(float(value or 0) * 100), 0)}%"
+        return _format_number(value)
+
     metrics_text = "; ".join(
-        f"{COPILOT_LABELS[language]['metrics'][name]} {_format_number(value.get('before'))} → {_format_number(value.get('modelled_after'))}"
+        f"{COPILOT_LABELS[language]['metrics'][name]} {metric_value(name, value.get('before'))} → {metric_value(name, value.get('modelled_after'))}"
         for name, value in selected_metrics.items()
     )
+    counts_text = ", ".join(
+        _template(language, "count_item", count=value, name=_resource_name(key, value, language))
+        for key, value in plan["requested_resources"].items()
+    )
     if used_defaults:
-        defaults = plan["requested_resources"]
-        count_text = ", ".join(_template(language, "count_item", count=value, name=_RESOURCE_LABELS[language][key]) for key, value in defaults.items())
-        answer = _template(language, "planner_default", counts=count_text)
+        answer = _template(language, "planner_default")
         if priorities:
             answer += " " + _template(language, "planner_summary",
-                priorities="; ".join(priorities), before=_format_number(plan["objective"]["before"], 3),
+                counts=counts_text, priorities="; ".join(priorities), before=_format_number(plan["objective"]["before"], 3),
                 after=_format_number(plan["objective"]["modelled_after"], 3),
                 reduction=_format_number(plan["objective"]["total_reduction"], 3), metrics=metrics_text)
     elif not priorities:
         answer = _template(language, "planner_no_actions")
     else:
         answer = _template(language, "planner_summary",
-            priorities="; ".join(priorities), before=_format_number(plan["objective"]["before"], 3),
+            counts=counts_text, priorities="; ".join(priorities), before=_format_number(plan["objective"]["before"], 3),
             after=_format_number(plan["objective"]["modelled_after"], 3),
             reduction=_format_number(plan["objective"]["total_reduction"], 3), metrics=metrics_text)
     facts = {
@@ -564,7 +642,7 @@ def _planner_result(message: str, context: dict[str, Any], language: str, config
     return {
         "answer": answer, "language": language, "intent": "planner_assistant", "mode": "template",
         "data_unavailable": False,
-        "sources": [_source("resource_plan", plan["plan_id"], "deterministic optimizer plan")],
+        "sources": [_source("resource_plan", plan["plan_id"], "deterministic optimizer plan"), *priority_sources],
         "facts_used": facts, "assumptions": assumptions,
         "context_entity": {"type": "plan", "id": plan["plan_id"]},
     }
@@ -620,7 +698,7 @@ def _heat_safety_result(message: str, context: dict[str, Any], language: str, co
         if selected_route is None:
             return _empty_result(language, "heat_safety")
         recommendation_info = route_result["facts_used"]["recommendation"]
-        recommendation = _citizen(language, recommendation_info["message_id"], **recommendation_info["message_params"])
+        recommendation = _recommendation_text(recommendation_info, language)
         items_text, stop_facts, stop_sources = _stops_summary(selected_route, language)
         status_id = selected_route.get("stops", {}).get("status_message_id")
         status = _citizen(language, status_id) if status_id in (CITIZEN_HI if language == "hi" else CITIZEN_EN) else _template(language, "unavailable")

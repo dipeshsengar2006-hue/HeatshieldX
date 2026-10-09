@@ -11,8 +11,9 @@ from app.i18n import CITIZEN_EN, CITIZEN_HI
 from app.main import app
 from app.repositories.cache import load_risk_snapshot
 from app.services import copilot_service
+from app.services.copilot_templates import COPILOT_LABELS, COPILOT_TEMPLATES
 from app.services.intervention_engine import optimize_resources
-from app.services.routing_engine import route_request
+from app.services.routing_engine import normalize_place_name, route_request, search_places
 
 
 CLIENT = TestClient(app)
@@ -77,6 +78,84 @@ def test_route_question_resolves_places_calls_route_engine_and_returns_api_facts
     assert copilot_service._parse_place_pair("मार्ग में गर्मी से बचने के लिए क्या करूँ?") is None
 
 
+@pytest.mark.parametrize("start,end", [
+    ("M.G. Road", "River Side Road"), ("MG Road", "River Side Road"),
+    ("mg road", "River Side Road"), ("M G Road", "River Side Road"),
+    ("Kadavghat road", "M.G. Road"), ("kadavghat rd", "M.G. Road"),
+    ("Kadavghat marg", "M.G. Road"),
+    ("Yashwant Road", "River Side Road"), ("River Side Road", "Kadavghat road"),
+])
+@pytest.mark.parametrize("language", ["en", "hi", "hinglish"])
+def test_place_aliases_are_resolved_from_the_cached_index_in_all_languages(start, end, language):
+    if language == "en":
+        query = f"from {start} to {end}"
+    elif language == "hi":
+        query = f"{start} से {end} जाना है"
+    else:
+        query = f"{start} se {end} jaana hai"
+    assert copilot_service._parse_place_pair(query) == (start, end)
+    for name in (start, end):
+        expected = normalize_place_name(name)
+        assert expected in {normalize_place_name(place["name"]) for place in search_places(name, limit=3)}
+
+
+@pytest.mark.parametrize("query,expected", [
+    ("from A to B", ("A", "B")),
+    ("go from A to B", ("A", "B")),
+    ("route from A to B", ("A", "B")),
+    ("A to B", ("A", "B")),
+    ("A to B route", ("A", "B")),
+    ("route from A to B", ("A", "B")),
+    ("I want to go from A to B", ("A", "B")),
+    ("from the A road to B please", ("A road", "B")),
+    ("A -> B", ("A", "B")),
+    ("A se B jaana hai", ("A", "B")),
+    ("A se B tak", ("A", "B")),
+    ("A से B जाना है", ("A", "B")),
+    ("A से B तक", ("A", "B")),
+])
+def test_route_parser_supports_english_hindi_and_hinglish_forms(query, expected):
+    assert copilot_service._parse_place_pair(query) == expected
+
+
+@pytest.mark.parametrize("query,normalized", [
+    ("M.G. Road", "mg road"), ("MG Road", "mg road"), ("mg road", "mg road"),
+    ("M G Road", "mg road"), ("Kadavghat road", "kadavghat road"),
+    ("kadavghat rd", "kadavghat road"), ("Yashwant Road", "yashwant road"),
+    ("River Side Road", "river side road"),
+])
+def test_places_endpoint_uses_normalization_without_changing_its_response_shape(query, normalized):
+    response = CLIENT.get("/api/places", params={"q": query})
+    assert response.status_code == 200
+    body = response.json()
+    assert set(body) == {"query", "places"}
+    assert body["query"] == query
+    assert body["places"]
+    assert normalized in {normalize_place_name(place["name"]) for place in body["places"]}
+
+
+def test_ambiguous_place_asks_for_choice_and_caps_options_at_three():
+    response = CLIENT.post("/api/copilot", json={
+        "message": "from road to MG Road", "ui_language": "en", "context": {"time": "09:00"},
+    })
+    assert response.status_code == 200
+    result = response.json()
+    assert "Which one did you mean?" in result["answer"]
+    assert 1 < len(result["facts_used"]["ambiguous_place_matches"]) <= 3
+
+
+def test_best_exact_place_match_wins_by_the_configured_margin():
+    config = get_config()
+    assert config.copilot_place_fuzzy_threshold == 0.82
+    assert config.copilot_place_match_margin == 0.12
+    resolved = copilot_service._resolve_place("Yashwant Road", config)
+    assert len(resolved) == 1
+    assert normalize_place_name(resolved[0]["name"]) == "yashwant road"
+    fuzzy = copilot_service._resolve_place("Kadavgat road", config)
+    assert len(fuzzy) == 1
+    assert normalize_place_name(fuzzy[0]["name"]) == "kadavghat road"
+
+
 def test_risk_explanation_requires_selected_street_and_matches_why_api():
     missing = CLIENT.post("/api/copilot", json={"message": "Why is this street high risk?", "ui_language": "en"}).json()
     assert "click a street" in missing["answer"].lower()
@@ -119,6 +198,57 @@ def test_planner_numbers_and_modelled_impact_match_optimizer():
     assert result["facts_used"]["objective"]["before"] == expected["objective"]["before"]
     assert result["facts_used"]["objective"]["modelled_after"] == expected["objective"]["modelled_after"]
     assert result["facts_used"]["priorities"][0]["share_of_total_reduction_percent"] == round(expected["priorities"][0]["share_of_total_reduction"] * 100, 1)
+
+
+def test_copilot_wording_plural_percentages_and_hindi_terms_are_clear(monkeypatch):
+    assert copilot_service._resource_name("cooling_centres", 1, "en") == "cooling centre"
+    assert copilot_service._resource_name("water_points", 2, "en") == "water points"
+    assert copilot_service._duration_label(1, "en") == "1 minute"
+    assert copilot_service._duration_label(2, "en") == "2 minutes"
+    one_minute = copilot_service._recommendation_text(
+        {"message_id": "recommendation_heat", "message_params": {"minutes": 1, "percent": "5.0"}}, "en",
+    )
+    assert "1 minute" in one_minute and "1 minutes" not in one_minute
+
+    english = CLIENT.post("/api/copilot", json={
+        "message": "I have 2 water points and 1 cooling centre", "ui_language": "en",
+    }).json()
+    assert "1 cooling centre" in english["answer"]
+    assert "2 water points" in english["answer"]
+    assert "0% → 82%" in english["answer"]
+    assert "modelled heat exposure on the streets that start as HIGH or CRITICAL" in english["answer"]
+    assert "an unnamed street near " in english["answer"]
+    assert "osm-" not in english["answer"].lower()
+    assert any(source["type"] == "street" and source["id"].startswith("osm-") for source in english["sources"])
+
+    hindi = CLIENT.post("/api/copilot", json={
+        "message": "Mere paas 2 water points aur 1 cooling centre hain", "ui_language": "hi",
+    }).json()
+    assert "संसाधन योजना मॉडल" in hindi["answer"]
+    assert "प्रस्तावित सुविधाओं से कवर किया गया हिस्सा" in hindi["answer"]
+    assert "0% → 82%" in hindi["answer"]
+    assert "अधिक जोखिम वाली सड़कों पर संवेदनशील लोगों के लिए गर्मी का मॉडल-अनुमान" in hindi["answer"]
+    assert "अनुकूलक" not in hindi["answer"]
+    assert "हस्तक्षेप" not in hindi["answer"]
+    assert "कवरेज" not in hindi["answer"]
+    assert not any(term in " ".join(CITIZEN_HI.values()) for term in ("अनुकूलक", "हस्तक्षेप"))
+    hindi_templates = list(COPILOT_TEMPLATES["hi"].values())
+    hindi_templates.extend(value for values in COPILOT_LABELS["hi"].values() if isinstance(values, dict) for value in values.values() if isinstance(value, str))
+    assert not any(term in value for value in hindi_templates if isinstance(value, str) for term in ("अनुकूलक", "हस्तक्षेप"))
+
+    height = CLIENT.post("/api/copilot", json={
+        "message": "Building height kaise estimate hui?", "ui_language": "hi",
+    }).json()
+    assert "डेटा में दर्ज इमारतों की संख्या" in height["answer"]
+
+
+def test_unnamed_street_uses_nearby_label_or_id_fallback(monkeypatch):
+    config = get_config()
+    monkeypatch.setattr(copilot_service, "nearest_named_place", lambda *_args, **_kwargs: ("Jawahar Marg", 82.0))
+    assert copilot_service._unnamed_street_label("osm-123", 22.7, 75.8, "en", config) == "an unnamed street near Jawahar Marg"
+    assert copilot_service._unnamed_street_label("osm-123", 22.7, 75.8, "hi", config) == "Jawahar Marg के पास बिना नाम की सड़क"
+    monkeypatch.setattr(copilot_service, "nearest_named_place", lambda *_args, **_kwargs: None)
+    assert copilot_service._unnamed_street_label("osm-123", 22.7, 75.8, "en", config) == "an unnamed street (ID osm-123)"
 
 
 def test_height_transparency_uses_cached_building_counts():
