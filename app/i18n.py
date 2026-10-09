@@ -362,6 +362,85 @@ CITIZEN_HI = {
     for key, value in CITIZEN_HI.items()
 }
 
+# Shared Copilot controls.  They deliberately live with the citizen catalog so
+# both public views use one reviewed English/Hindi source for the new UI.
+CITIZEN_EN.update({
+    "copilot_button": "Copilot",
+    "copilot_panel_title": "HeatShield Copilot",
+    "copilot_close": "Close Copilot",
+    "copilot_conversation": "Copilot conversation",
+    "copilot_context_none": "Using: current view",
+    "copilot_context_street": "Using: Street {name} at {time}",
+    "copilot_context_route": "Using: Route {origin} → {destination} at {time}",
+    "copilot_context_plan": "Using: Plan {water}/{cooling}/{shade}",
+    "copilot_examples": "Example questions",
+    "copilot_example_risk": "Why is this street high risk?",
+    "copilot_example_plan": "Explain the current resource plan.",
+    "copilot_example_data": "How were building heights estimated?",
+    "copilot_example_platform": "How do I use the time slider?",
+    "copilot_example_route": "How do I compare route options?",
+    "copilot_example_break": "I need a break along my current route.",
+    "copilot_example_heat": "Mujhe route mein heat se bachne ke liye kya karna chahiye?",
+    "copilot_example_height": "How were building heights estimated?",
+    "copilot_input_label": "Ask Copilot",
+    "copilot_input_placeholder": "Ask about the current model results",
+    "copilot_send": "Send",
+    "copilot_clear": "Clear conversation",
+    "copilot_character_count": "{count}/500",
+    "copilot_loading": "Copilot is checking model data…",
+    "copilot_template": "Template answer",
+    "copilot_ai_assisted": "AI-assisted, fact-checked",
+    "copilot_data_unavailable": "Data unavailable",
+    "copilot_facts_title": "Facts and assumptions used",
+    "copilot_facts": "Facts used",
+    "copilot_assumptions": "Assumptions",
+    "copilot_no_facts": "No cached facts were returned.",
+    "copilot_retry": "Retry",
+    "copilot_error_network": "Copilot could not be reached. The platform still works without it.",
+    "copilot_error_timeout": "Copilot took too long to respond. The platform still works without it.",
+    "copilot_error_422": "Your message is too long. Keep it to 500 characters.",
+    "copilot_error_unavailable": "Copilot is unavailable. The platform still works without it.",
+    "copilot_footer": "Copilot explains model results; it does not diagnose or give medical advice.",
+})
+CITIZEN_HI.update({
+    "copilot_button": "कोपायलट",
+    "copilot_panel_title": "हीटशील्ड कोपायलट",
+    "copilot_close": "कोपायलट बंद करें",
+    "copilot_conversation": "कोपायलट बातचीत",
+    "copilot_context_none": "उपयोग में: मौजूदा दृश्य",
+    "copilot_context_street": "उपयोग में: सड़क {name}, {time} पर",
+    "copilot_context_route": "उपयोग में: मार्ग {origin} → {destination}, {time} पर",
+    "copilot_context_plan": "उपयोग में: योजना {water}/{cooling}/{shade}",
+    "copilot_examples": "उदाहरण प्रश्न",
+    "copilot_example_risk": "इस सड़क पर जोखिम अधिक क्यों है?",
+    "copilot_example_plan": "मौजूदा संसाधन योजना समझाइए।",
+    "copilot_example_data": "इमारतों की ऊंचाई का अनुमान कैसे लगाया गया?",
+    "copilot_example_platform": "समय स्लाइडर का उपयोग कैसे करूं?",
+    "copilot_example_route": "मार्ग विकल्पों की तुलना कैसे करूं?",
+    "copilot_example_break": "मौजूदा मार्ग पर मुझे विश्राम की जगह चाहिए।",
+    "copilot_example_heat": "मुझे route में heat से बचने के लिए क्या करना चाहिए?",
+    "copilot_example_height": "इमारतों की ऊंचाई का अनुमान कैसे लगाया गया?",
+    "copilot_input_label": "कोपायलट से पूछें",
+    "copilot_input_placeholder": "मौजूदा मॉडल नतीजों के बारे में पूछें",
+    "copilot_send": "भेजें",
+    "copilot_clear": "बातचीत साफ़ करें",
+    "copilot_character_count": "{count}/500 वर्ण",
+    "copilot_loading": "कोपायलट मॉडल डेटा देख रहा है…",
+    "copilot_template": "टेम्पलेट उत्तर",
+    "copilot_ai_assisted": "AI-सहायित, तथ्य-जांचा हुआ",
+    "copilot_data_unavailable": "डेटा उपलब्ध नहीं है",
+    "copilot_facts_title": "इस्तेमाल किए गए तथ्य और मान्यताएं",
+    "copilot_facts": "इस्तेमाल किए गए तथ्य",
+    "copilot_assumptions": "मान्यताएं",
+    "copilot_no_facts": "सहेजे हुए तथ्य नहीं मिले।",
+    "copilot_retry": "फिर से कोशिश करें",
+    "copilot_error_network": "कोपायलट से संपर्क नहीं हो सका। प्लेटफ़ॉर्म इसके बिना भी काम करता है।",
+    "copilot_error_timeout": "कोपायलट के उत्तर में बहुत समय लगा। प्लेटफ़ॉर्म इसके बिना भी काम करता है।",
+    "copilot_error_422": "आपका संदेश बहुत लंबा है। इसे 500 वर्णों तक रखें।",
+    "copilot_error_unavailable": "कोपायलट उपलब्ध नहीं है। प्लेटफ़ॉर्म इसके बिना भी काम करता है।",
+    "copilot_footer": "कोपायलट मॉडल के नतीजे समझाता है; यह चिकित्सा संबंधी सलाह नहीं देता।",
+})
+
 
 CITIZEN_REQUIRED_IDS = frozenset("""
     page_title brand_name meta_description header_context nav_planner nav_citizen eyebrow title intro route_planner_title
@@ -388,6 +467,13 @@ CITIZEN_REQUIRED_IDS = frozenset("""
     summary_level_low summary_level_moderate summary_level_high summary_peak_window summary_distance
     summary_data_unavailable summary_loading summary_error summary_error_area summary_status_modelled summary_status_estimated
     summary_status_interpolated summary_map_level
+    copilot_button copilot_panel_title copilot_close copilot_conversation copilot_context_none copilot_context_street
+    copilot_context_route copilot_context_plan copilot_examples copilot_example_risk copilot_example_plan
+    copilot_example_data copilot_example_platform copilot_example_route copilot_example_break copilot_example_heat
+    copilot_example_height copilot_input_label copilot_input_placeholder copilot_send copilot_clear
+    copilot_character_count copilot_loading copilot_template copilot_ai_assisted copilot_data_unavailable
+    copilot_facts_title copilot_facts copilot_assumptions copilot_no_facts copilot_retry copilot_error_network
+    copilot_error_timeout copilot_error_422 copilot_error_unavailable copilot_footer
 """.split())
 
 

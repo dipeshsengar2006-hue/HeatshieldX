@@ -41,6 +41,15 @@
   let lastSummaryPayload = null;
   let summaryGeneration = 0;
 
+  function updateCopilotContext() {
+    if (!window.heatshieldCopilot) return;
+    window.heatshieldCopilot.setContext({
+      view: "citizen", time: timeOutput.value,
+      origin: fields.origin.point || undefined, destination: fields.destination.point || undefined,
+      origin_name: fields.origin.input.value.trim(), destination_name: fields.destination.input.value.trim(),
+    });
+  }
+
   function message(id, params = {}, englishFallback = "") {
     const template = (id && copy[id]) || (id && english[id]) || englishFallback || id || "";
     return String(template).replace(/\{([a-zA-Z0-9_]+)\}/g, (placeholder, name) => {
@@ -77,6 +86,8 @@
     document.querySelectorAll("[data-language]").forEach((button) => {
       button.setAttribute("aria-pressed", button.dataset.language === language ? "true" : "false");
     });
+    window.heatshieldCopilot?.setLanguage(language);
+    updateCopilotContext();
     setTimeLabel();
     if (lastSummaryPayload) renderSummary(lastSummaryPayload, Boolean(fields.origin.point));
     if (lastRoutePayload) renderRoutes(lastRoutePayload);
@@ -105,6 +116,7 @@
     const isCanonical = [540, 660, 780, 900, 1020].includes(minuteOfDay);
     timeStatus.textContent = message(isCanonical ? "modelled" : "interpolated");
     timeStatus.classList.toggle("estimated", !isCanonical);
+    updateCopilotContext();
   }
   range.addEventListener("input", () => {
     setTimeLabel();
@@ -301,6 +313,7 @@
       if (layerIndex === index) layer.bringToFront();
     });
     renderStops(currentRoutes[index]);
+    updateCopilotContext();
   }
 
   function renderRouteCard(route, index) {
@@ -358,6 +371,7 @@
     if (allCoordinates.length) map.fitBounds(L.latLngBounds(allCoordinates).pad(.12), { maxZoom: 18 });
     selectRoute(0);
     renderSummaryRouteNote(payload);
+    updateCopilotContext();
   }
 
   function routeErrorMessage(status, detail, errorPayload = {}) {
@@ -430,6 +444,7 @@
         field.results.replaceChildren();
         invalidateRouteResults();
         if (field === fields.origin) refreshOriginSummary();
+        updateCopilotContext();
       });
       field.results.append(option);
     });
@@ -440,6 +455,7 @@
     let originSummaryTimer;
     field.input.addEventListener("input", () => {
       field.point = null;
+      updateCopilotContext();
       window.clearTimeout(timer);
       if (field === fields.origin) {
         window.clearTimeout(originSummaryTimer);
@@ -484,6 +500,7 @@
     invalidateRouteResults();
     setStatus(message("status_pick_required"));
     if (field === fields.origin) refreshOriginSummary();
+    updateCopilotContext();
   });
 
   document.querySelectorAll("[data-preset]").forEach((button) => {
@@ -497,6 +514,7 @@
       invalidateRouteResults();
       range.value = String(Number(preset.time.slice(0, 2)) * 60 + Number(preset.time.slice(3)));
       setTimeLabel();
+      updateCopilotContext();
       refreshOriginSummary();
       submitRoutes();
     });

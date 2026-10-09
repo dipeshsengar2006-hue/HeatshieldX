@@ -41,6 +41,16 @@
 
   const formatTime = (minutes) => `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
   const activeTime = () => formatTime(Number(slider?.value || 540));
+  const updateCopilotContext = (details = {}) => {
+    if (!window.heatshieldCopilot) return;
+    const water = document.querySelector("#water-points")?.value || "0";
+    const cooling = document.querySelector("#cooling-centres")?.value || "0";
+    const shade = document.querySelector("#shade-structures")?.value || "0";
+    window.heatshieldCopilot.setContext({
+      view: "planner", time: activeTime(), plan_id: activePlanId,
+      plan_counts: { water, cooling, shade }, ...details,
+    });
+  };
   const riskColor = (riskClass) => ({ LOW: "#2e8b57", MODERATE: "#e2a132", HIGH: "#e76f34", CRITICAL: "#b42318" }[riskClass] || "#627d98");
   const append = (parent, tag, text, className) => {
     const element = document.createElement(tag);
@@ -147,6 +157,10 @@
       selectedKeys.add(payload.street.canonical_street_key);
       updateMapStyles();
       renderWhy(payload);
+      updateCopilotContext({
+        selected_segment_id: payload.street.canonical_street_key,
+        street_name: payload.street.street_name || payload.street.canonical_street_key,
+      });
     } catch (error) {
       if (whyPanel) {
         whyPanel.replaceChildren();
@@ -311,6 +325,7 @@
       renderProposedSites(payload);
       renderImpact(payload);
       if (resourceStatus) resourceStatus.textContent = `Modelled plan ${payload.plan_id} is ready.`;
+      updateCopilotContext();
       showRisk(activeTime());
     } catch (error) {
       if (resourceStatus) { resourceStatus.classList.add("error"); resourceStatus.textContent = `Unable to optimize: ${error.message}`; }
@@ -364,7 +379,7 @@
     if (buildingsToggle.checked) buildingLayer.addTo(map);
     else map.removeLayer(buildingLayer);
   });
-  slider?.addEventListener("input", () => showRisk(activeTime()));
+  slider?.addEventListener("input", () => { updateCopilotContext(); showRisk(activeTime()); });
   compareButton?.addEventListener("click", showComparison);
   resourceForm?.addEventListener("submit", optimizeResponse);
   scenarioButtons.forEach((button) => button.addEventListener("click", () => {
@@ -375,5 +390,6 @@
   }));
   loadBuildings();
   loadFacilities();
+  updateCopilotContext();
   showRisk(activeTime());
 })();

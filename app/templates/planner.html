@@ -7,11 +7,16 @@
     <link rel="stylesheet" href="/static/vendor/leaflet.css">
     <link rel="stylesheet" href="/static/css/base.css">
   </head>
-  <body data-lat="{{ demo_area.center_lat }}" data-lon="{{ demo_area.center_lon }}" data-snapshot-date="{{ data_download_date }}">
+  <body data-lat="{{ demo_area.center_lat }}" data-lon="{{ demo_area.center_lon }}" data-snapshot-date="{{ data_download_date }}" data-copilot-view="planner" data-copilot-api="/api/copilot">
     <header class="site-header">
       <a class="brand" href="/">HeatShield <span>X</span></a>
       <p>Hyperlocal Heat Risk Response</p>
       <nav class="mode-switch" aria-label="View mode"><a href="/" aria-current="page">Planner</a><a href="/citizen">Citizen</a></nav>
+      <div class="language-switch copilot-language-switch" role="group" aria-label="Copilot language">
+        <button type="button" data-copilot-language="en" aria-pressed="true">English</button>
+        <span aria-hidden="true">|</span>
+        <button type="button" data-copilot-language="hi" aria-pressed="false">हिन्दी</button>
+      </div>
     </header>
     <main class="planner-shell">
       <section class="intro" aria-labelledby="page-title">
@@ -87,7 +92,10 @@
       </section>
     </main>
     <footer>Configuration {{ config_version }} · Source: © OpenStreetMap contributors · Data download: {{ data_download_date }}</footer>
+    {% include "_copilot_panel.html" %}
+    <script id="copilot-catalogs" type="application/json">{{ copilot_strings|tojson }}</script>
     <script src="/static/vendor/leaflet.js"></script>
+    <script src="/static/js/copilot.js"></script>
     <script src="/static/js/planner.js"></script>
   </body>
 </html>

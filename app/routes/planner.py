@@ -101,6 +101,7 @@ def _stop_cache_summary() -> dict[str, object]:
 
 @router.get("/", response_class=HTMLResponse)
 def planner(request: Request) -> HTMLResponse:
+    validate_citizen_i18n()
     config = get_config()
     status = cache_status(config)
     load_error = None
@@ -120,6 +121,7 @@ def planner(request: Request) -> HTMLResponse:
             "resource_defaults": config.default_resource_counts,
             "data_download_date": _data_download_date(),
             "load_error": load_error,
+            "copilot_strings": {"en": CITIZEN_EN, "hi": CITIZEN_HI},
         },
     )
 

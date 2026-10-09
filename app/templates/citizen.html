@@ -9,7 +9,7 @@
     <link rel="stylesheet" href="/static/css/base.css">
     <link rel="stylesheet" href="/static/css/citizen.css">
   </head>
-  <body class="citizen-page" data-lat="{{ demo_area.center_lat }}" data-lon="{{ demo_area.center_lon }}" data-route-api="/api/routes" data-places-api="/api/places" data-summary-api="/api/public/summary" data-streets-api="/api/street-segments" data-data-date="{{ data_download_date }}" data-mode="{{ computation_mode|lower }}" data-min-heat-reduction-pct="{{ min_heat_reduction_pct }}">
+  <body class="citizen-page" data-lat="{{ demo_area.center_lat }}" data-lon="{{ demo_area.center_lon }}" data-route-api="/api/routes" data-places-api="/api/places" data-summary-api="/api/public/summary" data-streets-api="/api/street-segments" data-data-date="{{ data_download_date }}" data-mode="{{ computation_mode|lower }}" data-min-heat-reduction-pct="{{ min_heat_reduction_pct }}" data-copilot-view="citizen" data-copilot-api="/api/copilot">
     <header class="site-header citizen-header">
       <a class="brand" href="/" aria-label="{{ strings.brand_name }}" data-i18n="brand_name" data-i18n-aria-label="brand_name">{{ strings.brand_name }}</a>
       <p data-i18n="header_context">{{ strings.header_context }}</p>
@@ -147,9 +147,12 @@
     </main>
 
     <footer id="citizen-footer" data-i18n="footer" data-config-version="{{ config_version }}" data-data-date="{{ data_download_date }}">{{ strings.footer.format(config_version=config_version, data_download_date=data_download_date) }}</footer>
+    {% include "_copilot_panel.html" %}
     <script id="citizen-catalogs" type="application/json">{{ {"en": strings, "hi": hindi_strings}|tojson }}</script>
+    <script id="copilot-catalogs" type="application/json">{{ {"en": strings, "hi": hindi_strings}|tojson }}</script>
     <script id="citizen-presets" type="application/json">{{ demo_pairs|tojson }}</script>
     <script src="/static/vendor/leaflet.js"></script>
+    <script src="/static/js/copilot.js" defer></script>
     <script src="/static/js/citizen.js" defer></script>
   </body>
 </html>
