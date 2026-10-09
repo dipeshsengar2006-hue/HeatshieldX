@@ -9,13 +9,14 @@ from datetime import datetime
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.config import get_config
 from app.repositories.cache import cache_status, load_cached_geojson, load_exposure_snapshot, load_risk_snapshot, load_shadow_snapshot
 from app.services.explainability_engine import build_risk_drivers, deduplicate_risk_features, find_canonical_feature, rank_hottest_and_highest_risk, street_summary
 from app.services.intervention_engine import get_plan, list_candidates, optimize_resources
 from app.services.risk_engine import normalize_with_bounds, risk_class
+from app.services.routing_engine import RoutingError, route_request, search_places
 
 
 router = APIRouter()
@@ -26,6 +27,17 @@ class OptimizeRequest(BaseModel):
     water_points: int | None = None
     cooling_centres: int | None = None
     shade_structures: int | None = None
+
+
+class RouteCoordinate(BaseModel):
+    lat: float = Field(ge=-90, le=90)
+    lon: float = Field(ge=-180, le=180)
+
+
+class RouteRequest(BaseModel):
+    origin: RouteCoordinate
+    destination: RouteCoordinate
+    time: str
 
 
 def _load_or_503(name: str) -> dict:
@@ -103,6 +115,28 @@ def buildings() -> dict:
 @router.get("/api/facilities")
 def facilities() -> dict:
     return _load_or_503("facilities")
+
+
+@router.get("/api/places")
+def places(q: str = Query(..., min_length=1, max_length=100)) -> dict:
+    """Search only named streets, buildings, and amenities in the local cache."""
+    try:
+        return {"query": q, "places": search_places(q)}
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@router.post("/api/routes")
+def routes(payload: RouteRequest) -> dict:
+    """Generate cache-only route alternatives; request coordinates are not persisted."""
+    try:
+        return route_request(
+            (payload.origin.lat, payload.origin.lon),
+            (payload.destination.lat, payload.destination.lon),
+            payload.time,
+        )
+    except (RoutingError, FileNotFoundError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.get("/api/status")

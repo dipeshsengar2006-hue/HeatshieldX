@@ -190,6 +190,29 @@ def facility_query_tags(config: AppConfig) -> dict[str, list[str]]:
     return {tag_key: sorted(values) for tag_key, values in tags.items()}
 
 
+def stop_query_tags(config: AppConfig) -> dict[str, list[str]]:
+    """Build the standalone safe-stop OSM query from the configured tag rules."""
+    tags: dict[str, set[str]] = {}
+    for type_rules in config.stop_tag_rules.values():
+        for tag_key, values in type_rules.items():
+            tags.setdefault(tag_key, set()).update(values)
+    return {tag_key: sorted(values) for tag_key, values in tags.items()}
+
+
+def classify_stop(row: Any, config: AppConfig) -> tuple[str, list[str]] | None:
+    """Classify one OSM feature using only configured stop tags; healthcare is excluded."""
+    for stop_type, _priority in sorted(config.stop_type_priority.items(), key=lambda item: (item[1], item[0])):
+        matched = [
+            f"{tag_key}={value}"
+            for tag_key, values in config.stop_tag_rules[stop_type].items()
+            for value in values
+            if row.get(tag_key) is not None and str(row.get(tag_key)) == value
+        ]
+        if matched:
+            return stop_type, matched
+    return None
+
+
 def classify_facility(row: Any, config: AppConfig) -> tuple[str, str, str] | None:
     """Return facility type and matching OSM tag; healthcare never counts as cooling."""
     for facility_type in config.facility_classification_order:
@@ -227,6 +250,40 @@ def _normalize_facilities(facilities: gpd.GeoDataFrame, config: AppConfig) -> gp
             "computation_mode": config.computation_mode,
             "geometry": geometry,
         })
+    return gpd.GeoDataFrame(records, geometry="geometry", crs=projected.crs)
+
+
+def _normalize_stops(stops: gpd.GeoDataFrame, config: AppConfig) -> gpd.GeoDataFrame:
+    """Store only observed OSM fields required by the safe-stop finder."""
+    projected = project_to_metric_crs(repair_and_filter_geometries(stops, {"Point", "Polygon", "MultiPolygon"}, "safe stops"))
+    records: list[dict[str, Any]] = []
+    for index, row in projected.iterrows():
+        classification = classify_stop(row, config)
+        if classification is None:
+            continue
+        stop_type, amenities = classification
+        geometry: BaseGeometry = row.geometry if row.geometry.geom_type == "Point" else row.geometry.centroid
+        index_parts = index if isinstance(index, tuple) else (index,)
+        records.append({
+            "stop_id": "osm-" + "-".join(_safe_identifier(part) for part in index_parts),
+            "stop_type": stop_type,
+            "name": _json_safe(row.get("name")),
+            "amenities": json.dumps(amenities),
+            "source_type": "osm",
+            "source_reference": "OpenStreetMap via OSMnx",
+            "observed_or_estimated": "OBSERVED",
+            "modelled_or_interpolated": "NOT_APPLICABLE",
+            "timestamp": datetime.now(UTC).isoformat(),
+            "assumptions_version": config.version,
+            "computation_mode": config.computation_mode,
+            "geometry": geometry,
+        })
+    if not records:
+        return gpd.GeoDataFrame(
+            {"stop_id": [], "stop_type": [], "name": [], "amenities": [], "geometry": []},
+            geometry="geometry",
+            crs=projected.crs,
+        )
     return gpd.GeoDataFrame(records, geometry="geometry", crs=projected.crs)
 
 
@@ -316,3 +373,30 @@ def precompute_demo_area(config: AppConfig | None = None) -> dict[str, int | boo
     _write_geojson(active_config.cache_data_dir / "facilities.geojson", _to_wgs84(facility_records))
     LOGGER.info("OSM precompute completed in %.2fs: %s", time.perf_counter() - started, coverage)
     return coverage
+
+
+def precompute_stops(config: AppConfig | None = None) -> dict[str, int | str]:
+    """Refresh only cached OSM safe stops, leaving the base data caches untouched."""
+    active_config = config or get_config()
+    started = time.perf_counter()
+    point = (active_config.demo_area.center_lat, active_config.demo_area.center_lon)
+    LOGGER.info("Loading OSM safe stops for %s", active_config.demo_area.name)
+    try:
+        ox.settings.requests_timeout = active_config.osm_request_timeout_s
+        ox.settings.overpass_rate_limit = False
+        source_stops = ox.features_from_point(point, tags=stop_query_tags(active_config), dist=active_config.demo_area.radius_m)
+    except Exception as exc:  # OSM/network exceptions vary by provider and library version.
+        message = "Unable to load OpenStreetMap safe stops. Check network/Overpass availability, then rerun `python scripts/precompute_demo_area.py --stops-only`."
+        LOGGER.exception(message)
+        raise RuntimeError(message) from exc
+
+    stop_records = _normalize_stops(source_stops, active_config)
+    _write_geojson(active_config.cache_data_dir / "stops.geojson", _to_wgs84(stop_records))
+    report = {
+        "stop_count": len(stop_records),
+        "types": {stop_type: int((stop_records.get("stop_type") == stop_type).sum()) if not stop_records.empty else 0 for stop_type in active_config.stop_type_priority},
+        "config_version": active_config.version,
+        "duration_seconds": time.perf_counter() - started,
+    }
+    LOGGER.info("Safe-stop precompute completed in %.2fs: %s", report["duration_seconds"], report)
+    return report

@@ -3,8 +3,8 @@
 HeatShield X is a constrained, cache-first hyperlocal heat-response prototype.
 The planner shows cached street-level modelled prioritization, explainability,
 and the highest-exposure versus highest-priority comparison. The backend also
-provides deterministic, constrained modelled intervention plans and before/
-after impact data; a resource-planner UI and routing are not included yet.
+provides deterministic constrained intervention plans, cache-only heat-aware
+routing, and source-supported safe-stop results.
 
 ## Setup
 
@@ -26,6 +26,18 @@ python scripts/precompute_demo_area.py
 
 If the coverage gate fails, stop and select another dense approximately 1 km2
 Indore area explicitly; do not silently change configuration.
+
+## Refresh safe stops only
+
+This optional OSM request refreshes only `data/cache/stops.geojson`; it does
+not modify the cached streets, buildings, or facilities files.
+
+```powershell
+python scripts/precompute_demo_area.py --stops-only
+```
+
+Until that cache is present, routing remains available and returns `No stop
+data available` for each route.
 
 ## Precompute geometric shadow validation snapshots
 
@@ -68,6 +80,11 @@ python -m uvicorn app.main:app --reload
 
 Open `http://127.0.0.1:8000/`. The app serves precomputed files only. If no
 cache is present, it displays an actionable precompute instruction.
+
+The routing API is `POST /api/routes` with `origin`, `destination`, and
+`time` (`09:00`–`17:00`); `GET /api/places?q=...`
+searches cached named OSM places without an external geocoder. A departure-time
+snapshot is applied to the entire route as a documented prototype assumption.
 
 ## Test
 

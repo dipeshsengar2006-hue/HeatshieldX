@@ -42,6 +42,14 @@ class AppConfig(BaseModel):
     access_penalty_weights: dict[str, float]
     intervention_effect_coefficients: dict[str, float]
     route_objective_weights: dict[str, float]
+    walking_speed_kmh: float = Field(gt=0)
+    snap_max_distance_m: float = Field(gt=0)
+    heat_aware_max_detour_ratio: float = Field(ge=0)
+    routing_assumption_label: str
+    stop_max_route_distance_m: float = Field(gt=0)
+    stop_max_results: int = Field(gt=0)
+    stop_type_priority: dict[str, int]
+    stop_tag_rules: dict[str, dict[str, tuple[str, ...]]]
     representative_heatwave_date: date
     representative_timezone: str
     hourly_temperature_proxy_assumption: str
@@ -113,7 +121,7 @@ def get_config() -> AppConfig:
             "shadow_engine": True,
             "exposure_engine": True,
             "risk_engine": True,
-            "routing": False,
+            "routing": True,
             "copilot": False,
         },
         data_source_metadata={
@@ -131,6 +139,22 @@ def get_config() -> AppConfig:
         access_penalty_weights={"water": 0.5, "cooling": 0.5},
         intervention_effect_coefficients={"water_point": 1.0, "cooling_centre": 1.0, "shade_structure": 1.0},
         route_objective_weights={"alpha": 0.5, "beta": 0.5},
+        walking_speed_kmh=4.8,
+        snap_max_distance_m=100.0,
+        heat_aware_max_detour_ratio=0.35,
+        routing_assumption_label=(
+            "Prototype routing assumption: the cached exposure, shade, and access values at the "
+            "departure time are applied to every segment for the whole route; conditions do not evolve during travel."
+        ),
+        stop_max_route_distance_m=150.0,
+        stop_max_results=5,
+        stop_type_priority={"water": 0, "cooling": 1, "shaded_public": 2, "business": 3},
+        stop_tag_rules={
+            "water": {"amenity": ("drinking_water", "water_point", "fountain"), "man_made": ("water_tap",)},
+            "cooling": {"amenity": ("library", "community_centre", "townhall"), "shop": ("mall",)},
+            "shaded_public": {"leisure": ("park", "garden")},
+            "business": {"amenity": ("cafe", "restaurant", "fast_food", "ice_cream")},
+        },
         representative_heatwave_date=date(2026, 5, 15),
         representative_timezone="Asia/Kolkata",
         hourly_temperature_proxy_assumption=(
