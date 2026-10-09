@@ -83,6 +83,7 @@ def planner(request: Request) -> HTMLResponse:
             "config_version": config.version,
             "shadow_times": config.canonical_times,
             "exposure_mode": config.exposure_computation_mode,
+            "resource_defaults": config.default_resource_counts,
             "data_download_date": _data_download_date(),
             "load_error": load_error,
         },

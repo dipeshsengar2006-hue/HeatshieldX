@@ -9,10 +9,11 @@ from dataclasses import dataclass
 from typing import Any
 
 import geopandas as gpd
+import numpy as np
 from shapely.geometry import Point, shape
 
 from app.config import AppConfig, get_config
-from app.repositories.cache import load_cached_geojson, load_risk_snapshot
+from app.repositories.cache import load_cached_geojson, load_cached_plan, load_risk_snapshot, store_cached_plan
 from app.services.cooling_access_engine import (
     WalkingNetwork,
     bounded_distance_penalty,
@@ -57,6 +58,13 @@ def _config_key(config: AppConfig) -> str:
     cannot accidentally reuse a context with stale assumptions.
     """
     return json.dumps(config.model_dump(mode="json"), sort_keys=True, separators=(",", ":"))
+
+
+def _is_current_plan_cache(plan: dict[str, Any]) -> bool:
+    """Reject older on-disk plan payloads after a backwards-compatible schema addition."""
+    return isinstance(plan.get("metrics"), dict) and all(
+        "share_of_total_reduction" in priority for priority in plan.get("priorities", [])
+    )
 
 
 def _street_name_map() -> dict[str, str | None]:
@@ -331,17 +339,11 @@ def _impact_metrics(context: OptimizationContext, selected: list[str], before: d
         return sum(distances) / len(distances) if distances else "Data unavailable (no recorded facility)"
 
     proposed_water: dict[str, float | None] = {
-        key: _minimum_distance([
-            context.location_distances[context.candidates[candidate_id]["location_id"]][key]
-            for candidate_id in selected if context.candidates[candidate_id]["type"] == "water_points"
-        ])
+        key: _minimum_distance([context.location_distances[context.candidates[candidate_id]["location_id"]][key] for candidate_id in selected if context.candidates[candidate_id]["type"] == "water_points"])
         for key in context.streets
     }
     proposed_cooling: dict[str, float | None] = {
-        key: _minimum_distance([
-            context.location_distances[context.candidates[candidate_id]["location_id"]][key]
-            for candidate_id in selected if context.candidates[candidate_id]["type"] == "cooling_centres"
-        ])
+        key: _minimum_distance([context.location_distances[context.candidates[candidate_id]["location_id"]][key] for candidate_id in selected if context.candidates[candidate_id]["type"] == "cooling_centres"])
         for key in context.streets
     }
     intervention_covered = {
@@ -363,6 +365,145 @@ def _impact_metrics(context: OptimizationContext, selected: list[str], before: d
     }
 
 
+def _batch_candidate_objectives(context: OptimizationContext, selected: list[str], eligible: list[str]) -> dict[str, float]:
+    """Score every next greedy choice with candidate × street × time NumPy arrays.
+
+    This is intentionally a mathematical translation of ``_scenario``: cached
+    risk inputs, configured coefficients, normalization bounds, and greedy
+    ordering are unchanged.  Feature construction remains in ``_scenario`` so
+    API payloads retain their established shape.
+    """
+    if not eligible:
+        return {}
+    keys = sorted(context.streets)
+    key_index = {key: index for index, key in enumerate(keys)}
+    times = context.config.canonical_times
+    lengths = np.asarray([context.streets[key]["length_m"] for key in keys], dtype=float)
+    vulnerability = np.asarray(
+        [context.snapshots[times[0]][key]["properties"]["vulnerability_value"] for key in keys], dtype=float
+    )
+    shades = np.asarray(
+        [[context.snapshots[time][key]["properties"]["shade_fraction"] for key in keys] for time in times], dtype=float
+    )
+    baseline_water = np.asarray(
+        [context.snapshots[times[0]][key]["properties"]["distance_to_water_m"] for key in keys], dtype=object
+    )
+    baseline_cooling = np.asarray(
+        [context.snapshots[times[0]][key]["properties"]["distance_to_cooling_m"] for key in keys], dtype=object
+    )
+    water_distances = np.asarray([float(value) if value is not None else np.inf for value in baseline_water], dtype=float)
+    cooling_distances = np.asarray([float(value) if value is not None else np.inf for value in baseline_cooling], dtype=float)
+    selected_shade_keys: set[str] = set()
+    for candidate_id in selected:
+        candidate = context.candidates[candidate_id]
+        location_distances = np.asarray(
+            [context.location_distances[candidate["location_id"]][key] for key in keys], dtype=object
+        )
+        proposed = np.asarray([float(value) if value is not None else np.inf for value in location_distances], dtype=float)
+        if candidate["type"] == "water_points":
+            water_distances = np.minimum(water_distances, proposed)
+        elif candidate["type"] == "cooling_centres":
+            cooling_distances = np.minimum(cooling_distances, proposed)
+        else:
+            selected_shade_keys.add(candidate["street_canonical_key"])
+    shade_increase = context.config.shade_structure_shade_increase * context.config.intervention_effect_coefficients["shade_structure"]
+    for key in selected_shade_keys:
+        shades[:, key_index[key]] = np.minimum(1.0, shades[:, key_index[key]] + shade_increase)
+
+    def raw_values(water: np.ndarray, cooling: np.ndarray, active_shades: np.ndarray) -> np.ndarray:
+        water_penalty = np.clip(water / context.config.water_service_radius_m, 0.0, 1.0)
+        cooling_penalty = np.clip(cooling / context.config.cooling_service_radius_m, 0.0, 1.0)
+        access = np.clip(
+            context.config.access_penalty_weights["water"] * water_penalty
+            + context.config.access_penalty_weights["cooling"] * cooling_penalty,
+            0.0,
+            1.0,
+        )
+        factors = np.asarray([temperature_factor(context.config, time) for time in times], dtype=float)[:, None]
+        exposure = np.clip(
+            (1.0 - active_shades)
+            * (context.config.exposure_direct_weight + context.config.exposure_temperature_weight * factors)
+            * context.config.exposure_duration_factor,
+            0.0,
+            1.0,
+        )
+        return exposure * vulnerability[None, :] * (1.0 + access[None, :])
+
+    current_raw = raw_values(water_distances, cooling_distances, shades)
+    current_objective = float(np.sum(current_raw * lengths[None, :]))
+    result: dict[str, float] = {}
+    grouped: dict[str, list[str]] = {resource_type: [] for resource_type in RESOURCE_TYPES}
+    for candidate_id in eligible:
+        grouped[context.candidates[candidate_id]["type"]].append(candidate_id)
+
+    for resource_type in ("water_points", "cooling_centres"):
+        candidate_ids = grouped[resource_type]
+        if not candidate_ids:
+            continue
+        distances = np.asarray(
+            [
+                [
+                    float(context.location_distances[context.candidates[candidate_id]["location_id"]][key])
+                    if context.location_distances[context.candidates[candidate_id]["location_id"]][key] is not None else np.inf
+                    for key in keys
+                ]
+                for candidate_id in candidate_ids
+            ],
+            dtype=float,
+        )
+        if resource_type == "water_points":
+            candidate_water = np.minimum(water_distances[None, :], distances)
+            candidate_cooling = np.broadcast_to(cooling_distances, candidate_water.shape)
+        else:
+            candidate_cooling = np.minimum(cooling_distances[None, :], distances)
+            candidate_water = np.broadcast_to(water_distances, candidate_cooling.shape)
+        water_penalty = np.clip(candidate_water / context.config.water_service_radius_m, 0.0, 1.0)
+        cooling_penalty = np.clip(candidate_cooling / context.config.cooling_service_radius_m, 0.0, 1.0)
+        access = np.clip(
+            context.config.access_penalty_weights["water"] * water_penalty
+            + context.config.access_penalty_weights["cooling"] * cooling_penalty,
+            0.0,
+            1.0,
+        )
+        base_risk = np.clip(
+            (1.0 - shades)
+            * (context.config.exposure_direct_weight + context.config.exposure_temperature_weight * np.asarray([temperature_factor(context.config, time) for time in times])[:, None])
+            * context.config.exposure_duration_factor,
+            0.0,
+            1.0,
+        ) * vulnerability[None, :]
+        objectives = np.sum(base_risk[None, :, :] * (1.0 + access[:, None, :]) * lengths[None, None, :], axis=(1, 2))
+        result.update({candidate_id: float(objective) for candidate_id, objective in zip(candidate_ids, objectives, strict=True)})
+
+    for candidate_id in grouped["shade_structures"]:
+        key = context.candidates[candidate_id]["street_canonical_key"]
+        index = key_index[key]
+        if key in selected_shade_keys:
+            result[candidate_id] = current_objective
+            continue
+        changed_shade = np.minimum(1.0, shades[:, index] + shade_increase)
+        factors = np.asarray([temperature_factor(context.config, time) for time in times], dtype=float)
+        changed_exposure = np.clip(
+            (1.0 - changed_shade)
+            * (context.config.exposure_direct_weight + context.config.exposure_temperature_weight * factors)
+            * context.config.exposure_duration_factor,
+            0.0,
+            1.0,
+        )
+        water_penalty = np.clip(water_distances[index] / context.config.water_service_radius_m, 0.0, 1.0)
+        cooling_penalty = np.clip(cooling_distances[index] / context.config.cooling_service_radius_m, 0.0, 1.0)
+        access = np.clip(
+            context.config.access_penalty_weights["water"] * water_penalty
+            + context.config.access_penalty_weights["cooling"] * cooling_penalty,
+            0.0,
+            1.0,
+        )
+        old_total = float(np.sum(current_raw[:, index] * lengths[index]))
+        new_total = float(np.sum(changed_exposure * vulnerability[index] * (1.0 + access) * lengths[index]))
+        result[candidate_id] = current_objective - old_total + new_total
+    return result
+
+
 def optimize_resources(values: dict[str, int | None], config: AppConfig | None = None) -> dict[str, Any]:
     """Create a deterministic greedy ResourcePlan from cached baseline inputs."""
     active_config = config or get_config()
@@ -370,6 +511,11 @@ def optimize_resources(values: dict[str, int | None], config: AppConfig | None =
     plan_id = plan_id_for(counts, active_config)
     if config is None and plan_id in _PLAN_CACHE:
         return _PLAN_CACHE[plan_id]
+    if config is None:
+        cached_plan = load_cached_plan(plan_id, active_config)
+        if cached_plan is not None and _is_current_plan_cache(cached_plan):
+            _PLAN_CACHE[plan_id] = cached_plan
+            return cached_plan
     started = time.perf_counter()
     context = get_optimization_context(active_config)
     before = _scenario(context, [], include_features=True)
@@ -378,18 +524,18 @@ def optimize_resources(values: dict[str, int | None], config: AppConfig | None =
     remaining = dict(counts)
     priorities: list[dict[str, Any]] = []
     while any(remaining.values()):
-        evaluations: list[tuple[float, str, dict[str, Any]]] = []
-        for candidate_id in sorted(context.candidates):
-            candidate = context.candidates[candidate_id]
-            resource_type = candidate["type"]
-            if remaining[resource_type] <= 0 or candidate_id in selected:
-                continue
-            proposed = _scenario(context, [*selected, candidate_id], include_features=False)
-            benefit = max(0.0, current["objective"] - proposed["objective"])
-            evaluations.append((benefit, candidate_id, proposed))
+        eligible = [
+            candidate_id for candidate_id in sorted(context.candidates)
+            if remaining[context.candidates[candidate_id]["type"]] > 0 and candidate_id not in selected
+        ]
+        proposed_objectives = _batch_candidate_objectives(context, selected, eligible)
+        evaluations = [
+            (max(0.0, current["objective"] - proposed_objectives[candidate_id]), candidate_id)
+            for candidate_id in eligible
+        ]
         if not evaluations:
             break
-        benefit, candidate_id, proposed = sorted(evaluations, key=lambda item: (-item[0], item[1]))[0]
+        benefit, candidate_id = sorted(evaluations, key=lambda item: (-item[0], item[1]))[0]
         if benefit <= 0:
             break
         candidate = context.candidates[candidate_id]
@@ -410,9 +556,11 @@ def optimize_resources(values: dict[str, int | None], config: AppConfig | None =
                 f"reduces the five-time vulnerable heat-exposure objective by {benefit:.3f}."
             ),
         })
-        current = {"objective": proposed["objective"]}
+        current = {"objective": proposed_objectives[candidate_id]}
     after = _scenario(context, selected, include_features=True)
     reduction = before["objective"] - after["objective"]
+    for priority in priorities:
+        priority["share_of_total_reduction"] = priority["marginal_benefit"] / reduction if reduction else 0.0
     plan = {
         "plan_id": plan_id,
         "label": "Modelled",
@@ -436,6 +584,7 @@ def optimize_resources(values: dict[str, int | None], config: AppConfig | None =
     }
     if config is None:
         _PLAN_CACHE[plan_id] = plan
+        store_cached_plan(plan_id, plan, active_config)
     return plan
 
 
@@ -443,4 +592,9 @@ def get_plan(plan_id: str, config: AppConfig | None = None) -> dict[str, Any]:
     active_config = config or get_config()
     if config is None and plan_id in _PLAN_CACHE:
         return _PLAN_CACHE[plan_id]
+    if config is None:
+        cached_plan = load_cached_plan(plan_id, active_config)
+        if cached_plan is not None and _is_current_plan_cache(cached_plan):
+            _PLAN_CACHE[plan_id] = cached_plan
+            return cached_plan
     return optimize_resources(parse_plan_id(plan_id, active_config), active_config if config is not None else None)

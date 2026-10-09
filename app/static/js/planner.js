@@ -14,11 +14,24 @@
   const whyPanel = document.querySelector("#why-panel");
   const compareButton = document.querySelector("#compare-hottest");
   const comparisonPanel = document.querySelector("#comparison-panel");
+  const resourceForm = document.querySelector("#resource-form");
+  const optimizeButton = document.querySelector("#optimize-response");
+  const resourceStatus = document.querySelector("#resource-status");
+  const deploymentPlan = document.querySelector("#deployment-plan");
+  const impactPanel = document.querySelector("#impact-panel");
+  const impactMetrics = document.querySelector("#impact-metrics");
+  const impactNote = document.querySelector("#impact-note");
+  const riskClassCounts = document.querySelector("#risk-class-counts");
+  const scenarioButtons = document.querySelectorAll("[data-scenario]");
   let buildingLayer;
+  let facilityLayer;
   let riskLayer;
+  let proposedLayer;
   let selectedKeys = new Set();
   let riskRequestVersion = 0;
   let hasFittedBounds = false;
+  let activePlanId;
+  let scenario = "before";
 
   // Tiles are optional: essential streets and interactions use cached API data.
   L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
@@ -82,6 +95,21 @@
     }
   };
 
+  const loadFacilities = async () => {
+    try {
+      const response = await fetch("/api/facilities");
+      if (!response.ok) throw new Error("Facility cache is unavailable.");
+      const collection = await response.json();
+      facilityLayer = L.geoJSON(collection, {
+        pointToLayer: (feature, location) => L.circleMarker(location, {
+          radius: 4, color: "#4b5563", weight: 1, fillColor: "#9ca3af", fillOpacity: 0.9,
+        }).bindTooltip(`Observed OSM ${feature.properties.facility_type || "facility"}: ${feature.properties.name || "Unnamed"}`),
+      }).addTo(map);
+    } catch (error) {
+      console.warn("HeatShield facility data is unavailable.", error);
+    }
+  };
+
   const renderWhy = (payload) => {
     if (!whyPanel) return;
     const { street } = payload;
@@ -129,11 +157,17 @@
     }
   }
 
+  const planRiskUrl = (requestedTime) => {
+    const query = new URLSearchParams({ time: requestedTime });
+    if (scenario === "after" && activePlanId) query.set("plan_id", activePlanId);
+    return `/api/risk?${query.toString()}`;
+  };
+
   const showRisk = async (requestedTime) => {
     const requestVersion = ++riskRequestVersion;
     if (exposureStatus) exposureStatus.textContent = `Loading cached modelled prioritization for ${requestedTime}...`;
     try {
-      const response = await fetch(`/api/risk?time=${encodeURIComponent(requestedTime)}`);
+      const response = await fetch(planRiskUrl(requestedTime));
       if (!response.ok) throw new Error("Risk cache is unavailable.");
       const collection = await response.json();
       if (requestVersion !== riskRequestVersion) return;
@@ -163,9 +197,126 @@
         ? `${requestedTime} is interpolated from cached ${metadata.interpolation_lower_time} and ${metadata.interpolation_upper_time} model snapshots.`
         : `${requestedTime} uses a cached modelled-prioritization snapshot for ${metadata.street_deduplication?.unique_street_count ?? "all"} unique streets.`;
       if (comparisonPanel) comparisonPanel.hidden = true;
+      if (activePlanId) refreshRiskClassCounts();
     } catch (error) {
       if (exposureStatus) exposureStatus.textContent = "Risk cache is unavailable. Run `python scripts/precompute_risk.py`; cached base map data remains available.";
       console.warn("HeatShield risk data is unavailable.", error);
+    }
+  };
+
+  const displayValue = (value) => {
+    if (typeof value === "number") return `${value >= 0 ? "" : ""}${value.toFixed(3)}`;
+    if (value && typeof value === "object") return Object.entries(value).map(([key, count]) => `${key}: ${count}`).join(", ");
+    return value ?? "—";
+  };
+
+  const metricLabel = (key) => key.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+
+  const renderImpact = (plan) => {
+    if (!impactPanel || !impactMetrics) return;
+    impactPanel.hidden = false;
+    impactMetrics.replaceChildren();
+    Object.entries(plan.metrics).forEach(([key, value]) => {
+      const row = document.createElement("tr");
+      const label = append(row, "th", `${metricLabel(key)} — ${value.definition}`);
+      label.scope = "row";
+      label.title = value.definition;
+      append(row, "td", displayValue(value.before));
+      append(row, "td", displayValue(value.modelled_after));
+      append(row, "td", displayValue(value.delta));
+      impactMetrics.append(row);
+    });
+    const unavailable = Object.values(plan.metrics).some((value) => String(value.before).includes("Data unavailable (no recorded facility)"));
+    if (impactNote) impactNote.hidden = !unavailable;
+    scenarioButtons.forEach((button) => button.setAttribute("aria-pressed", String(button.dataset.scenario === scenario)));
+    refreshRiskClassCounts();
+  };
+
+  const countClasses = (collection) => collection.features.reduce((counts, feature) => {
+    const riskClass = feature.properties.risk_class;
+    counts[riskClass] = (counts[riskClass] || 0) + 1;
+    return counts;
+  }, {});
+
+  async function refreshRiskClassCounts() {
+    if (!activePlanId || !riskClassCounts) return;
+    try {
+      const time = activeTime();
+      const [beforeResponse, afterResponse] = await Promise.all([
+        fetch(`/api/risk?time=${encodeURIComponent(time)}`),
+        fetch(`/api/risk?time=${encodeURIComponent(time)}&plan_id=${encodeURIComponent(activePlanId)}`),
+      ]);
+      if (!beforeResponse.ok || !afterResponse.ok) throw new Error("Risk counts unavailable");
+      const [before, after] = await Promise.all([beforeResponse.json(), afterResponse.json()]);
+      riskClassCounts.textContent = `Risk-class street counts at ${time}${before.metadata?.interpolated ? " (Interpolated)" : ""} — Before: ${displayValue(countClasses(before))}. Modelled After: ${displayValue(countClasses(after))}.`;
+    } catch (error) {
+      riskClassCounts.textContent = "Risk-class counts are unavailable for the selected time.";
+      console.warn("HeatShield impact counts are unavailable.", error);
+    }
+  }
+
+  const renderProposedSites = (plan) => {
+    if (proposedLayer) map.removeLayer(proposedLayer);
+    proposedLayer = L.layerGroup();
+    selectedKeys = new Set(plan.priorities.filter((item) => item.type === "shade_structures").map((item) => item.street_canonical_key));
+    plan.priorities.forEach((item) => {
+      const marker = L.circleMarker([item.lat, item.lon], {
+        radius: 7, color: "#174a7e", weight: 2, fillColor: "#5bb6e5", fillOpacity: 0.9,
+      }).bindTooltip(`Proposed ${item.type_label}: ${item.street_name || item.street_canonical_key}`);
+      marker.on("click", () => focusPlanItem(item));
+      proposedLayer.addLayer(marker);
+    });
+    proposedLayer.addTo(map);
+    updateMapStyles();
+  };
+
+  const focusPlanItem = (item) => {
+    map.setView([item.lat, item.lon], Math.max(map.getZoom(), 17));
+    selectStreet(item.street_canonical_key, { preserveHighlights: true });
+  };
+
+  const renderDeploymentPlan = (plan) => {
+    if (!deploymentPlan) return;
+    deploymentPlan.replaceChildren();
+    plan.priorities.forEach((item) => {
+      const entry = append(deploymentPlan, "li");
+      entry.tabIndex = 0;
+      entry.setAttribute("role", "button");
+      entry.setAttribute("aria-label", `Focus proposed ${item.type_label} on ${item.street_name || item.street_canonical_key}`);
+      append(entry, "strong", `${item.priority}. ${item.type_label} — ${item.street_name || item.street_canonical_key}`);
+      append(entry, "span", `Street ID: ${item.street_canonical_key}. ${Math.round(item.share_of_total_reduction * 100)}% of total modelled reduction.`);
+      append(entry, "span", item.explanation);
+      entry.addEventListener("click", () => focusPlanItem(item));
+      entry.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") { event.preventDefault(); focusPlanItem(item); }
+      });
+    });
+  };
+
+  const optimizeResponse = async (event) => {
+    event.preventDefault();
+    if (!resourceForm || !optimizeButton) return;
+    const formData = new FormData(resourceForm);
+    const values = Object.fromEntries(["water_points", "cooling_centres", "shade_structures"].map((key) => [key, Number(formData.get(key))]));
+    optimizeButton.disabled = true;
+    optimizeButton.textContent = "Optimizing…";
+    if (resourceStatus) { resourceStatus.classList.remove("error"); resourceStatus.textContent = "Building the modelled deployment plan…"; }
+    try {
+      const response = await fetch("/api/optimize", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(values) });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.detail || "Optimization could not be completed.");
+      activePlanId = payload.plan_id;
+      scenario = "after";
+      renderDeploymentPlan(payload);
+      renderProposedSites(payload);
+      renderImpact(payload);
+      if (resourceStatus) resourceStatus.textContent = `Modelled plan ${payload.plan_id} is ready.`;
+      showRisk(activeTime());
+    } catch (error) {
+      if (resourceStatus) { resourceStatus.classList.add("error"); resourceStatus.textContent = `Unable to optimize: ${error.message}`; }
+    } finally {
+      optimizeButton.disabled = false;
+      optimizeButton.textContent = "Optimize Response";
     }
   };
 
@@ -215,6 +366,14 @@
   });
   slider?.addEventListener("input", () => showRisk(activeTime()));
   compareButton?.addEventListener("click", showComparison);
+  resourceForm?.addEventListener("submit", optimizeResponse);
+  scenarioButtons.forEach((button) => button.addEventListener("click", () => {
+    if (!activePlanId) return;
+    scenario = button.dataset.scenario;
+    scenarioButtons.forEach((item) => item.setAttribute("aria-pressed", String(item === button)));
+    showRisk(activeTime());
+  }));
   loadBuildings();
+  loadFacilities();
   showRisk(activeTime());
 })();

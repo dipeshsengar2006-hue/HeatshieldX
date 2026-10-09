@@ -96,6 +96,7 @@ def test_multiple_buildings_produce_multiple_shadows():
     assert all(shadow.is_valid for shadow in shadows.geometry)
 
 
+@pytest.mark.slow
 def test_all_canonical_times_process_real_rajwada_sarafa_data():
     """Test 6: all five configured times process the fixed real demo cache."""
     config = get_config()
@@ -116,6 +117,7 @@ def test_all_canonical_times_process_real_rajwada_sarafa_data():
         assert stats.invalid_streets_skipped == 0
 
 
+@pytest.mark.slow
 def test_shade_fraction_bounds_for_all_canonical_snapshots():
     """Test 7: every cached real-data shade fraction remains within [0, 1]."""
     config = get_config()

@@ -31,6 +31,7 @@
             <span><i class="legend-moderate"></i> MODERATE · 26–50</span>
             <span><i class="legend-high"></i> HIGH · 51–75</span>
             <span><i class="legend-critical"></i> CRITICAL · 76–100</span>
+            <span><i class="legend-observed-facility"></i> Observed OSM facility</span>
             <small>Modelled prioritization, not a medical threshold.</small>
             <label class="layer-toggle"><input id="buildings-toggle" type="checkbox" checked> Building footprints</label>
           </aside>
@@ -59,6 +60,31 @@
         </div>
       </section>
       <section id="comparison-panel" class="comparison-panel" hidden aria-live="polite"></section>
+      <section class="planner-response" aria-labelledby="response-title">
+        <div>
+          <p class="eyebrow">Resource planner</p>
+          <h2 id="response-title">Modelled response resources</h2>
+          <p>Set available resources, then generate a deterministic modelled deployment plan.</p>
+        </div>
+        <form id="resource-form" class="resource-form" novalidate>
+          <label>Water points <input id="water-points" name="water_points" type="number" min="0" max="10" step="1" value="{{ resource_defaults.water_points }}" required></label>
+          <label>Cooling centres <input id="cooling-centres" name="cooling_centres" type="number" min="0" max="10" step="1" value="{{ resource_defaults.cooling_centres }}" required></label>
+          <label>Shade structures <input id="shade-structures" name="shade_structures" type="number" min="0" max="10" step="1" value="{{ resource_defaults.shade_structures }}" required></label>
+          <button id="optimize-response" class="primary-button" type="submit">Optimize Response</button>
+        </form>
+        <p id="resource-status" class="planner-status" aria-live="polite"></p>
+        <p class="facility-note">Proposed sites are modelled candidates, not existing facilities.</p>
+        <ol id="deployment-plan" class="deployment-plan" aria-label="Ordered deployment plan"></ol>
+      </section>
+      <section id="impact-panel" class="impact-panel" aria-labelledby="impact-title" hidden>
+        <div class="impact-heading">
+          <div><p class="eyebrow">Modelled Impact</p><h2 id="impact-title">Before / after response scenario</h2></div>
+          <div class="scenario-toggle" role="group" aria-label="Map scenario"><button type="button" data-scenario="before" aria-pressed="true">Before</button><button type="button" data-scenario="after" aria-pressed="false">Modelled After</button></div>
+        </div>
+        <p id="impact-note" class="facility-note" hidden>No water/cooling facilities are recorded in OSM for this area, so baseline coverage is 0%.</p>
+        <div class="table-wrap"><table><thead><tr><th>Metric</th><th>Before</th><th>Modelled After</th><th>Delta</th></tr></thead><tbody id="impact-metrics"></tbody></table></div>
+        <div id="risk-class-counts" class="risk-class-counts" aria-live="polite"></div>
+      </section>
     </main>
     <footer>Configuration {{ config_version }} · Source: © OpenStreetMap contributors · Data download: {{ data_download_date }}</footer>
     <script src="/static/vendor/leaflet.js"></script>

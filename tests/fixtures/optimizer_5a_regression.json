@@ -1,0 +1,14 @@
+{
+  "2-1-2": {
+    "candidate_ids": ["cooling_centres:osm-2025019937-9523322987", "water_points:osm-2025019941-9523322985", "water_points:osm-2027156516-3734494575", "shade_structures:osm-2025111283-8460457262", "shade_structures:osm-3734494606-3734496670"],
+    "before": 62860.209799467986,
+    "after": 54063.57492919198,
+    "metric_after": {"cooling_coverage": 0.8161460054967585, "water_coverage": 0.3754789828209684, "intervention_coverage": 0.8161460054967585, "high_risk_vulnerable_exposure": 11841.814641645089}
+  },
+  "4-2-4": {
+    "candidate_ids": ["cooling_centres:osm-2025019937-9523322987", "cooling_centres:osm-3734496853-6997640180", "water_points:osm-2025019941-9523322985", "water_points:osm-2027156516-3734494575", "water_points:osm-2025111228-3734496854", "water_points:osm-3734496840-3734496860", "shade_structures:osm-3734494606-3734496670", "shade_structures:osm-2025111283-8460457262", "shade_structures:osm-3732489063-3734496680", "shade_structures:osm-2025020003-6611316218"],
+    "before": 62860.209799467986,
+    "after": 49402.37427095066,
+    "metric_after": {"cooling_coverage": 0.9834767323086163, "water_coverage": 0.6762054527684468, "intervention_coverage": 0.9834767323086163, "high_risk_vulnerable_exposure": 10333.47342560794}
+  }
+}

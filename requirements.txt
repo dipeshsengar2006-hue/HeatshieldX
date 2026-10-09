@@ -2,6 +2,7 @@ fastapi==0.143.0
 uvicorn==0.40.0
 jinja2==3.1.6
 pydantic==2.13.4
+numpy==2.4.6
 osmnx==2.1.1
 geopandas==1.2.0
 shapely==2.2.0

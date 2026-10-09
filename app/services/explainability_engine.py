@@ -19,7 +19,7 @@ RISK_VALUE_FIELDS = (
 
 
 def canonical_street_key(segment_id: str) -> str:
-    """Return the stable undirected identity for an OSM street node pair.
+    """Return the stable undirected identity from a directed ID or canonical key.
 
     OSMnx segment IDs are ``osm-{u}-{v}-{edge_key}``.  Sorting ``u`` and ``v``
     collapses both directions (and any parallel directed edges) into the one
@@ -29,10 +29,13 @@ def canonical_street_key(segment_id: str) -> str:
     """
     if not segment_id.startswith("osm-"):
         raise ValueError(f"Unsupported segment ID '{segment_id}'.")
-    try:
-        start, end, _edge_key = segment_id.removeprefix("osm-").rsplit("-", 2)
-    except ValueError as exc:
-        raise ValueError(f"Unsupported segment ID '{segment_id}'.") from exc
+    parts = segment_id.removeprefix("osm-").rsplit("-", 2)
+    if len(parts) == 2:
+        start, end = parts
+    elif len(parts) == 3:
+        start, end, _edge_key = parts
+    else:
+        raise ValueError(f"Unsupported segment ID '{segment_id}'.")
     first, second = sorted((start, end), key=lambda value: (not value.isdigit(), int(value) if value.isdigit() else value))
     return f"osm-{first}-{second}"
 

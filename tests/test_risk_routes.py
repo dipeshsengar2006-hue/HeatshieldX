@@ -16,6 +16,10 @@ def test_risk_api_returns_modelled_canonical_cache_and_interpolated_between(clie
     assert interpolated.json()["metadata"]["interpolated"] is True
     assert interpolated.json()["metadata"]["modelled_or_interpolated"] == "INTERPOLATED"
 
+    why = client.get(f"/api/segments/{payload['features'][0]['properties']['canonical_street_key']}/why?time=15:00")
+    assert why.status_code == 200
+    assert why.json()["street"]["canonical_street_key"] == payload["features"][0]["properties"]["canonical_street_key"]
+
     breakdown = client.get(f"/api/segments/{segment_id}/risk?time=15:00")
     assert breakdown.status_code == 200
     properties = breakdown.json()["risk"]["properties"]
