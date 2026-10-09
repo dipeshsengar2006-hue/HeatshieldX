@@ -129,6 +129,15 @@ def _level(value: float, thresholds: tuple[float, float]) -> str:
     return "HIGH"
 
 
+def _cooling_access_level(access_penalty: float, thresholds: tuple[float, float]) -> str:
+    """Translate penalty direction into user-facing access quality."""
+    if access_penalty < thresholds[0]:
+        return "GOOD"
+    if access_penalty < thresholds[1]:
+        return "MODERATE"
+    return "POOR"
+
+
 def build_risk_drivers(record: dict[str, Any], config: AppConfig | None = None) -> dict[str, Any]:
     """Build explainability fields exclusively from a cached risk record."""
     active_config = config or get_config()
@@ -137,16 +146,21 @@ def build_risk_drivers(record: dict[str, Any], config: AppConfig | None = None) 
         ("solar_exposure", "Solar exposure", float(record["exposure_value"]), float(record["exposure_value"])),
         ("shade", "Shade", shade, 1.0 - shade),
         ("vulnerability", "Estimated vulnerability", float(record["vulnerability_value"]), float(record["vulnerability_value"])),
-        ("cooling_access_penalty", "Cooling-access penalty", float(record["access_penalty"]), float(record["access_penalty"])),
+        ("cooling_access_penalty", "Cooling access", float(record["access_penalty"]), float(record["access_penalty"])),
     ]
     denominator = sum(driver[3] for driver in raw_drivers)
     drivers = []
     for identifier, label, value, explanatory_impact in raw_drivers:
+        level = (
+            _cooling_access_level(value, active_config.explainability_level_thresholds[identifier])
+            if identifier == "cooling_access_penalty"
+            else _level(value, active_config.explainability_level_thresholds[identifier])
+        )
         drivers.append({
             "id": identifier,
             "label": label,
             "value": value,
-            "level": _level(value, active_config.explainability_level_thresholds[identifier]),
+            "level": level,
             "relative_contribution": explanatory_impact / denominator if denominator else 0.25,
         })
     drivers.sort(key=lambda driver: (-driver["relative_contribution"], driver["id"]))
@@ -161,7 +175,7 @@ def build_risk_drivers(record: dict[str, Any], config: AppConfig | None = None) 
         elif driver["id"] == "vulnerability":
             phrases.append(f"{driver['level'].lower()} estimated vulnerability")
         elif record["water_available"] or record["cooling_available"]:
-            phrases.append(f"{driver['level'].lower()} cooling-access penalty")
+            phrases.append(f"{driver['level'].lower()} cooling access")
         else:
             phrases.append("no recorded water/cooling facilities in OSM for this area")
     primary_sentence = "Primary drivers are " + ", ".join(phrases[:-1]) + (", and " if len(phrases) > 1 else "") + phrases[-1] + "."
@@ -199,4 +213,12 @@ def rank_hottest_and_highest_risk(features: list[dict[str, Any]]) -> dict[str, A
     risk_ties = [feature for feature in features if abs(float(feature["properties"]["risk_score"]) - highest_risk_value) <= 1e-12]
     hottest = sorted(hottest_ties, key=lambda feature: feature["properties"]["canonical_street_key"])[0]
     highest_risk = sorted(risk_ties, key=lambda feature: (-float(feature["properties"]["exposure_value"]), feature["properties"]["canonical_street_key"]))[0]
-    return {"hottest": hottest, "highest_risk": highest_risk, "hottest_tie_count": len(hottest_ties), "highest_risk_tie_count": len(risk_ties)}
+    hottest_scores = [float(feature["properties"]["risk_score"]) for feature in hottest_ties]
+    return {
+        "hottest": hottest,
+        "highest_risk": highest_risk,
+        "hottest_tie_count": len(hottest_ties),
+        "hottest_tie_risk_score_min": min(hottest_scores),
+        "hottest_tie_risk_score_max": max(hottest_scores),
+        "highest_risk_tie_count": len(risk_ties),
+    }

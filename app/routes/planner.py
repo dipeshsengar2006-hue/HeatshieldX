@@ -9,15 +9,23 @@ from datetime import datetime
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
+from pydantic import BaseModel
 
 from app.config import get_config
 from app.repositories.cache import cache_status, load_cached_geojson, load_exposure_snapshot, load_risk_snapshot, load_shadow_snapshot
 from app.services.explainability_engine import build_risk_drivers, deduplicate_risk_features, find_canonical_feature, rank_hottest_and_highest_risk, street_summary
+from app.services.intervention_engine import get_plan, list_candidates, optimize_resources
 from app.services.risk_engine import normalize_with_bounds, risk_class
 
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
+
+
+class OptimizeRequest(BaseModel):
+    water_points: int | None = None
+    cooling_centres: int | None = None
+    shade_structures: int | None = None
 
 
 def _load_or_503(name: str) -> dict:
@@ -219,7 +227,7 @@ def _interpolated_risk_snapshot(requested_time: str, lower: dict, upper: dict, r
     }
 
 
-def _risk_snapshot_or_503(requested_time: str) -> dict:
+def _risk_snapshot_or_503(requested_time: str, plan_id: str | None = None) -> dict:
     """Return a canonical risk cache or an explicitly flagged cached-field interpolation."""
     config = get_config()
     requested_minutes = _minutes_since_midnight(requested_time)
@@ -227,7 +235,22 @@ def _risk_snapshot_or_503(requested_time: str) -> dict:
     if requested_minutes < start or requested_minutes > end or requested_minutes % 30:
         raise HTTPException(status_code=422, detail="Time must be between 09:00 and 17:00 in 30-minute increments.")
     try:
-        if requested_time in config.canonical_times:
+        if plan_id:
+            try:
+                plan = get_plan(plan_id)
+            except ValueError as exc:
+                raise HTTPException(status_code=422, detail=str(exc)) from exc
+            scenario_snapshots = plan["after_snapshots"]
+            if requested_time in config.canonical_times:
+                snapshot = scenario_snapshots[requested_time]
+            else:
+                canonical_minutes = [_minutes_since_midnight(value) for value in config.canonical_times]
+                upper_index = next(index for index, minute in enumerate(canonical_minutes) if minute > requested_minutes)
+                lower_time, upper_time = config.canonical_times[upper_index - 1], config.canonical_times[upper_index]
+                ratio = (requested_minutes - canonical_minutes[upper_index - 1]) / (canonical_minutes[upper_index] - canonical_minutes[upper_index - 1])
+                snapshot = _interpolated_risk_snapshot(requested_time, scenario_snapshots[lower_time], scenario_snapshots[upper_time], ratio)
+            snapshot.setdefault("metadata", {}).update({"requested_time": requested_time, "interpolated": requested_time not in config.canonical_times, "plan_id": plan_id})
+        elif requested_time in config.canonical_times:
             snapshot = load_risk_snapshot(requested_time, config)
             snapshot.setdefault("metadata", {}).update({"requested_time": requested_time, "interpolated": False})
         else:
@@ -243,8 +266,35 @@ def _risk_snapshot_or_503(requested_time: str) -> dict:
 
 
 @router.get("/api/risk")
-def risk(time: str = Query(..., description="09:00–17:00 in 30-minute increments")) -> dict:
-    return _risk_snapshot_or_503(time)
+def risk(time: str = Query(..., description="09:00–17:00 in 30-minute increments"), plan_id: str | None = None) -> dict:
+    return _risk_snapshot_or_503(time, plan_id)
+
+
+def _public_plan(plan: dict) -> dict:
+    """Keep in-memory after snapshots out of plan response bodies."""
+    return {key: value for key, value in plan.items() if key != "after_snapshots"}
+
+
+@router.get("/api/interventions/candidates")
+def intervention_candidates() -> dict:
+    return list_candidates()
+
+
+@router.post("/api/optimize")
+def optimize(payload: OptimizeRequest) -> dict:
+    try:
+        plan = optimize_resources(payload.model_dump())
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return _public_plan(plan)
+
+
+@router.get("/api/plans/{plan_id}")
+def plan(plan_id: str) -> dict:
+    try:
+        return _public_plan(get_plan(plan_id))
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @router.get("/api/segments/{segment_id}/risk")
@@ -308,13 +358,15 @@ def compare_hottest(time: str = Query(..., description="09:00–17:00 in 30-minu
             f"The highest-exposure street has exposure {hottest['exposure_value']:.3f} and modelled priority {hottest['risk_score']:.1f}; "
             f"the highest-priority street has exposure {highest_risk['exposure_value']:.3f}, "
             f"{highest_risk['vulnerability_level'].lower()} estimated vulnerability, "
-            f"{highest_risk['cooling_access_level'].lower()} cooling-access penalty, and modelled priority {highest_risk['risk_score']:.1f}."
+            f"{highest_risk['cooling_access_level'].lower()} cooling access, and modelled priority {highest_risk['risk_score']:.1f}."
         )
     return {
         "requested_time": time,
         "hottest": hottest,
         "highest_risk": highest_risk,
         "hottest_tie_count": ranked["hottest_tie_count"],
+        "hottest_tie_risk_score_min": ranked["hottest_tie_risk_score_min"],
+        "hottest_tie_risk_score_max": ranked["hottest_tie_risk_score_max"],
         "highest_risk_tie_count": ranked["highest_risk_tie_count"],
         "explanation": explanation,
         "metadata": snapshot["metadata"],

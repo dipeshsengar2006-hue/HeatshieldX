@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from heapq import heappop, heappush
 from typing import Any
 
@@ -31,16 +32,17 @@ def _node_key(point: Point) -> tuple[float, float]:
     return (round(point.x, 2), round(point.y, 2))
 
 
-def _walking_distances_to_facilities(streets: gpd.GeoDataFrame, facilities: gpd.GeoDataFrame) -> list[float | None]:
-    """Find nearest-facility walking paths on the cached street-segment graph.
+@dataclass(frozen=True)
+class WalkingNetwork:
+    """Reusable cached-street graph for access and intervention simulation."""
 
-    A facility is snapped to its nearest observed network endpoint. A segment is
-    evaluated from its midpoint, with half its observed length added before the
-    shortest graph path. A disconnected path is unavailable rather than guessed.
-    """
-    if facilities.empty:
-        return [None] * len(streets)
+    adjacency: dict[tuple[float, float], list[tuple[tuple[float, float], float]]]
+    node_points: dict[tuple[float, float], Point]
+    segment_endpoints: tuple[tuple[tuple[float, float], tuple[float, float], float], ...]
 
+
+def build_walking_network(streets: gpd.GeoDataFrame) -> WalkingNetwork:
+    """Build the observed cached-street graph once for repeated distance queries."""
     adjacency: dict[tuple[float, float], list[tuple[tuple[float, float], float]]] = {}
     node_points: dict[tuple[float, float], Point] = {}
     segment_endpoints: list[tuple[tuple[float, float], tuple[float, float], float]] = []
@@ -51,13 +53,24 @@ def _walking_distances_to_facilities(streets: gpd.GeoDataFrame, facilities: gpd.
         adjacency.setdefault(start_key, []).append((end_key, length))
         adjacency.setdefault(end_key, []).append((start_key, length))
         segment_endpoints.append((start_key, end_key, length))
+    return WalkingNetwork(adjacency, node_points, tuple(segment_endpoints))
 
-    distances = {node: float("inf") for node in adjacency}
+
+def walking_distances_from_points(network: WalkingNetwork, facility_points: list[Point]) -> list[float | None]:
+    """Reuse the access-engine network calculation for observed or proposed points.
+
+    A point is snapped to its nearest observed network endpoint. A segment is
+    evaluated from its midpoint, with half its observed length added before the
+    shortest graph path. A disconnected path is unavailable rather than guessed.
+    """
+    if not facility_points:
+        return [None] * len(network.segment_endpoints)
+
+    distances = {node: float("inf") for node in network.adjacency}
     queue: list[tuple[float, tuple[float, float]]] = []
-    for facility_geometry in facilities.geometry:
-        facility_point = facility_geometry.centroid if facility_geometry.geom_type != "Point" else facility_geometry
-        nearest_node = min(node_points, key=lambda node: facility_point.distance(node_points[node]))
-        initial_distance = float(facility_point.distance(node_points[nearest_node]))
+    for facility_point in facility_points:
+        nearest_node = min(network.node_points, key=lambda node: facility_point.distance(network.node_points[node]))
+        initial_distance = float(facility_point.distance(network.node_points[nearest_node]))
         if initial_distance < distances[nearest_node]:
             distances[nearest_node] = initial_distance
             heappush(queue, (initial_distance, nearest_node))
@@ -65,17 +78,23 @@ def _walking_distances_to_facilities(streets: gpd.GeoDataFrame, facilities: gpd.
         current_distance, node = heappop(queue)
         if current_distance != distances[node]:
             continue
-        for neighbour, edge_length in adjacency[node]:
+        for neighbour, edge_length in network.adjacency[node]:
             candidate = current_distance + edge_length
             if candidate < distances[neighbour]:
                 distances[neighbour] = candidate
                 heappush(queue, (candidate, neighbour))
 
     result: list[float | None] = []
-    for start, end, length in segment_endpoints:
+    for start, end, length in network.segment_endpoints:
         best = min(distances[start], distances[end])
         result.append(None if best == float("inf") else best + (length / 2))
     return result
+
+
+def _walking_distances_to_facilities(streets: gpd.GeoDataFrame, facilities: gpd.GeoDataFrame) -> list[float | None]:
+    """Find nearest-facility walking paths on the cached street-segment graph."""
+    points = [geometry.centroid if geometry.geom_type != "Point" else geometry for geometry in facilities.geometry]
+    return walking_distances_from_points(build_walking_network(streets), points)
 
 
 def build_cooling_access_records(config: AppConfig | None = None) -> tuple[dict[str, dict[str, Any]], dict[str, Any]]:

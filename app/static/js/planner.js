@@ -197,7 +197,7 @@
       comparisonPanel.replaceChildren();
       append(comparisonPanel, "h2", "Why not the hottest?");
       append(comparisonPanel, "p", payload.explanation);
-      append(comparisonPanel, "p", `Exposure tie count: ${payload.hottest_tie_count}. Highest-risk tie count: ${payload.highest_risk_tie_count}.`, "panel-empty");
+      append(comparisonPanel, "p", `${payload.hottest_tie_count} streets tie for the highest exposure; their risk ranges from ${Number(payload.hottest_tie_risk_score_min).toFixed(1)} to ${Number(payload.hottest_tie_risk_score_max).toFixed(1)}. Highest-risk tie count: ${payload.highest_risk_tie_count}.`, "panel-empty");
       const cards = append(comparisonPanel, "div", undefined, "comparison-cards");
       cards.append(comparisonCard("Highest exposure", payload.hottest), comparisonCard("Highest modelled priority", payload.highest_risk));
     } catch (error) {

@@ -1,5 +1,5 @@
 {
-  "config_version": "2026-10-09-prompt-4b-risk-explainability",
+  "config_version": "2026-10-09-prompt-5a-interventions",
   "selected_computation_mode": "geometric",
   "temperature_proxy_label": "Prototype assumption, not observed data or a medical measurement.",
   "snapshots": {
@@ -10,7 +10,7 @@
       "exposure_min": 0.0,
       "exposure_mean": 0.37263118133200696,
       "exposure_max": 0.5,
-      "duration_seconds": 0.038211300037801266
+      "duration_seconds": 0.0418699998408556
     },
     "11:00": {
       "computation_mode": "geometric",
@@ -19,7 +19,7 @@
       "exposure_min": 0.0,
       "exposure_mean": 0.7220432500668336,
       "exposure_max": 0.7777777777777778,
-      "duration_seconds": 0.04934659996069968
+      "duration_seconds": 0.046062299981713295
     },
     "13:00": {
       "computation_mode": "geometric",
@@ -28,7 +28,7 @@
       "exposure_min": 0.6564669025575884,
       "exposure_mean": 0.9415917695765648,
       "exposure_max": 0.9444444444444444,
-      "duration_seconds": 0.04137949994765222
+      "duration_seconds": 0.04570000013336539
     },
     "15:00": {
       "computation_mode": "geometric",
@@ -37,7 +37,7 @@
       "exposure_min": 0.0010613828854570961,
       "exposure_mean": 0.8630649933335509,
       "exposure_max": 1.0,
-      "duration_seconds": 0.04038959997706115
+      "duration_seconds": 0.04087170003913343
     },
     "17:00": {
       "computation_mode": "geometric",
@@ -46,8 +46,8 @@
       "exposure_min": 0.0,
       "exposure_mean": 0.4536032368407339,
       "exposure_max": 0.7777777777777778,
-      "duration_seconds": 0.0378751999232918
+      "duration_seconds": 0.0401591002009809
     }
   },
-  "duration_seconds": 0.20723539986647666
+  "duration_seconds": 0.2146982999984175
 }

@@ -50,6 +50,9 @@ def test_driver_values_and_contributions_come_from_risk_record_only():
     assert round(sum(driver["relative_contribution"] for driver in drivers["drivers"]), 12) == 1.0
     forbidden = ("diagnos", "patient", "disease", "illness", "heatstroke")
     assert not any(term in drivers["primary_drivers_sentence"].lower() for term in forbidden)
+    assert by_id["cooling_access_penalty"]["level"] == "POOR"
+    record["access_penalty"] = 0.0
+    assert {driver["id"]: driver for driver in build_risk_drivers(record)["drivers"]}["cooling_access_penalty"]["level"] == "GOOD"
 
 
 def test_why_endpoint_resolves_both_directions_and_updates_labels(client):
@@ -83,6 +86,8 @@ def test_compare_hottest_endpoint_reports_ties_and_uses_deterministic_breaking(c
     assert response.status_code == 200
     payload = response.json()
     assert payload["hottest_tie_count"] == 2
+    assert payload["hottest_tie_risk_score_min"] == 65.0
+    assert payload["hottest_tie_risk_score_max"] == 90.0
     assert payload["highest_risk_tie_count"] == 1
     assert payload["hottest"]["canonical_street_key"] == "osm-10-20"
     assert payload["highest_risk"]["canonical_street_key"] == "osm-30-40"

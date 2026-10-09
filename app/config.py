@@ -66,6 +66,12 @@ class AppConfig(BaseModel):
     risk_normalization_scope: str
     explainability_level_thresholds: dict[str, tuple[float, float]]
     explainability_dominant_driver_count: int = Field(ge=1, le=4)
+    default_resource_counts: dict[str, int]
+    max_resource_count_per_type: int = Field(ge=0)
+    candidate_min_street_length_m: float = Field(gt=0)
+    shade_structure_shade_increase: float = Field(ge=0, le=1)
+    optimization_scope: str
+    optimization_assumption_label: str
     facility_tag_rules: dict[str, dict[str, tuple[str, ...]]]
     facility_classification_order: tuple[str, ...]
     osm_request_timeout_s: int
@@ -84,7 +90,7 @@ def get_config() -> AppConfig:
         raise ValueError("HEATSHIELD_EXPOSURE_MODE must be geometric or estimated.")
 
     return AppConfig(
-        version="2026-10-09-prompt-4b-risk-explainability",
+        version="2026-10-09-prompt-5a-interventions",
         demo_area=DemoArea(
             name="Rajwada-Sarafa demonstration area",
             city="Indore",
@@ -123,7 +129,7 @@ def get_config() -> AppConfig:
         cooling_service_radius_m=650,
         water_service_radius_m=300,
         access_penalty_weights={"water": 0.5, "cooling": 0.5},
-        intervention_effect_coefficients={"water_point": 0.0, "cooling_centre": 0.0, "shade_structure": 0.0},
+        intervention_effect_coefficients={"water_point": 1.0, "cooling_centre": 1.0, "shade_structure": 1.0},
         route_objective_weights={"alpha": 0.5, "beta": 0.5},
         representative_heatwave_date=date(2026, 5, 15),
         representative_timezone="Asia/Kolkata",
@@ -159,6 +165,15 @@ def get_config() -> AppConfig:
             "cooling_access_penalty": (1 / 3, 2 / 3),
         },
         explainability_dominant_driver_count=3,
+        default_resource_counts={"water_points": 2, "cooling_centres": 1, "shade_structures": 2},
+        max_resource_count_per_type=10,
+        candidate_min_street_length_m=30.0,
+        shade_structure_shade_increase=0.5,
+        optimization_scope="ALL_FIVE_CANONICAL_TIMES_EQUALLY_WEIGHTED",
+        optimization_assumption_label=(
+            "Prototype assumption, modelled, not validated: proposed water, cooling, and shade interventions "
+            "are simulated using cached network distance and exposure functions."
+        ),
         facility_tag_rules={
             "healthcare": {"amenity": ("hospital", "clinic")},
             "water": {

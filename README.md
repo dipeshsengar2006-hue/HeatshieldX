@@ -2,8 +2,9 @@
 
 HeatShield X is a constrained, cache-first hyperlocal heat-response prototype.
 The planner shows cached street-level modelled prioritization, explainability,
-and the highest-exposure versus highest-priority comparison. It does not yet
-include routing or intervention optimization.
+and the highest-exposure versus highest-priority comparison. The backend also
+provides deterministic, constrained modelled intervention plans and before/
+after impact data; a resource-planner UI and routing are not included yet.
 
 ## Setup
 
