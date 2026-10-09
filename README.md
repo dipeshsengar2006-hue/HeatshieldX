@@ -1,8 +1,9 @@
 # HeatShield X
 
 HeatShield X is a constrained, cache-first hyperlocal heat-response prototype.
-Prompt 1 provides the FastAPI planner shell and OSM precompute pipeline only;
-it does not calculate risk, shadows, routes, or intervention effects.
+The planner shows cached street-level modelled prioritization, explainability,
+and the highest-exposure versus highest-priority comparison. It does not yet
+include routing or intervention optimization.
 
 ## Setup
 
@@ -45,6 +46,17 @@ cache.
 
 ```powershell
 python scripts/precompute_exposure.py
+```
+
+## Precompute risk snapshots
+
+Generate the cached risk records used by the planner map and explanations.
+This combines the existing exposure cache with the documented estimated
+vulnerability proxy and cached OSM cooling/water-access records; it never runs
+in web requests.
+
+```powershell
+python scripts/precompute_risk.py
 ```
 
 ## Run locally

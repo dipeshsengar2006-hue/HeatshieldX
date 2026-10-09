@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+import math
 from datetime import datetime
 
 from fastapi import APIRouter, HTTPException, Query, Request
@@ -10,6 +12,7 @@ from fastapi.templating import Jinja2Templates
 
 from app.config import get_config
 from app.repositories.cache import cache_status, load_cached_geojson, load_exposure_snapshot, load_risk_snapshot, load_shadow_snapshot
+from app.services.explainability_engine import build_risk_drivers, deduplicate_risk_features, find_canonical_feature, rank_hottest_and_highest_risk, street_summary
 from app.services.risk_engine import normalize_with_bounds, risk_class
 
 
@@ -22,6 +25,36 @@ def _load_or_503(name: str) -> dict:
         return load_cached_geojson(name)
     except FileNotFoundError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+def _data_download_date() -> str:
+    """Return the date of the preloaded OSM snapshot when it is available."""
+    try:
+        timestamp = load_cached_geojson("streets")["features"][0]["properties"].get("timestamp", "")
+        return str(timestamp)[:10] or "Unavailable"
+    except (FileNotFoundError, IndexError, KeyError):
+        return "Unavailable"
+
+
+def _street_name(directed_segment_ids: list[str]) -> str | None:
+    """Get only an observed OSM road name; absent tags remain absent."""
+    try:
+        streets = load_cached_geojson("streets")["features"]
+    except FileNotFoundError:
+        return None
+    for feature in streets:
+        properties = feature["properties"]
+        if properties.get("segment_id") not in directed_segment_ids:
+            continue
+        try:
+            name = json.loads(properties.get("road_metadata", "{} ")).get("name")
+        except (TypeError, json.JSONDecodeError):
+            continue
+        if isinstance(name, str) and name.strip():
+            return name.strip()
+        if isinstance(name, float) and math.isnan(name):
+            continue
+    return None
 
 
 @router.get("/", response_class=HTMLResponse)
@@ -42,6 +75,7 @@ def planner(request: Request) -> HTMLResponse:
             "config_version": config.version,
             "shadow_times": config.canonical_times,
             "exposure_mode": config.exposure_computation_mode,
+            "data_download_date": _data_download_date(),
             "load_error": load_error,
         },
     )
@@ -166,6 +200,8 @@ def _interpolated_risk_snapshot(requested_time: str, lower: dict, upper: dict, r
             **lower_properties,
             "canonical_time": requested_time,
             "exposure_value": float(lower_properties["exposure_value"]) + (float(upper_properties["exposure_value"]) - float(lower_properties["exposure_value"])) * ratio,
+            "shade_fraction": float(lower_properties["shade_fraction"]) + (float(upper_properties["shade_fraction"]) - float(lower_properties["shade_fraction"])) * ratio,
+            "direct_exposure_fraction": float(lower_properties["direct_exposure_fraction"]) + (float(upper_properties["direct_exposure_fraction"]) - float(lower_properties["direct_exposure_fraction"])) * ratio,
             "baseline_risk": float(lower_properties["baseline_risk"]) + (float(upper_properties["baseline_risk"]) - float(lower_properties["baseline_risk"])) * ratio,
             "final_risk_raw": raw,
             "risk_score": score,
@@ -194,12 +230,14 @@ def _risk_snapshot_or_503(requested_time: str) -> dict:
         if requested_time in config.canonical_times:
             snapshot = load_risk_snapshot(requested_time, config)
             snapshot.setdefault("metadata", {}).update({"requested_time": requested_time, "interpolated": False})
-            return snapshot
-        canonical_minutes = [_minutes_since_midnight(value) for value in config.canonical_times]
-        upper_index = next(index for index, minute in enumerate(canonical_minutes) if minute > requested_minutes)
-        lower_time, upper_time = config.canonical_times[upper_index - 1], config.canonical_times[upper_index]
-        ratio = (requested_minutes - canonical_minutes[upper_index - 1]) / (canonical_minutes[upper_index] - canonical_minutes[upper_index - 1])
-        return _interpolated_risk_snapshot(requested_time, load_risk_snapshot(lower_time, config), load_risk_snapshot(upper_time, config), ratio)
+        else:
+            canonical_minutes = [_minutes_since_midnight(value) for value in config.canonical_times]
+            upper_index = next(index for index, minute in enumerate(canonical_minutes) if minute > requested_minutes)
+            lower_time, upper_time = config.canonical_times[upper_index - 1], config.canonical_times[upper_index]
+            ratio = (requested_minutes - canonical_minutes[upper_index - 1]) / (canonical_minutes[upper_index] - canonical_minutes[upper_index - 1])
+            snapshot = _interpolated_risk_snapshot(requested_time, load_risk_snapshot(lower_time, config), load_risk_snapshot(upper_time, config), ratio)
+        features, consistency = deduplicate_risk_features(snapshot["features"])
+        return {"type": "FeatureCollection", "features": features, "metadata": {**snapshot["metadata"], "street_deduplication": consistency}}
     except FileNotFoundError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
@@ -212,10 +250,75 @@ def risk(time: str = Query(..., description="09:00–17:00 in 30-minute incremen
 @router.get("/api/segments/{segment_id}/risk")
 def segment_risk(segment_id: str, time: str = Query(..., description="09:00–17:00 in 30-minute increments")) -> dict:
     snapshot = _risk_snapshot_or_503(time)
-    for feature in snapshot["features"]:
-        if feature["properties"].get("segment_id") == segment_id:
-            return {"segment_id": segment_id, "requested_time": time, "risk": feature, "metadata": snapshot["metadata"]}
+    feature = find_canonical_feature(snapshot["features"], segment_id)
+    if feature is not None:
+        return {"segment_id": segment_id, "requested_time": time, "risk": feature, "metadata": snapshot["metadata"]}
     raise HTTPException(status_code=404, detail=f"Segment '{segment_id}' is not present in the cached risk snapshot.")
+
+
+@router.get("/api/segments/{segment_id}/why")
+def segment_why(segment_id: str, time: str = Query(..., description="09:00–17:00 in 30-minute increments")) -> dict:
+    """Return deterministic, source-grounded drivers for either street direction."""
+    snapshot = _risk_snapshot_or_503(time)
+    feature = find_canonical_feature(snapshot["features"], segment_id)
+    if feature is None:
+        raise HTTPException(status_code=404, detail=f"Segment '{segment_id}' is not present in the cached risk snapshot.")
+    drivers = build_risk_drivers(feature["properties"])
+    summary = street_summary(feature, drivers)
+    summary["street_name"] = _street_name(summary["directed_segment_ids"])
+    status = "Interpolated" if snapshot["metadata"]["modelled_or_interpolated"] == "INTERPOLATED" else "Modelled"
+    return {
+        "requested_time": time,
+        "street": summary,
+        "drivers": drivers["drivers"],
+        "dominant_driver_ids": drivers["dominant_driver_ids"],
+        "primary_drivers_sentence": drivers["primary_drivers_sentence"],
+        "status_labels": ["Observed", "Estimated", status],
+        "status_label_details": {
+            "Observed": "Street geometry and any recorded OSM facility data.",
+            "Estimated": "Density-based vulnerability proxy; not a population count.",
+            status: "Cached model output." if status == "Modelled" else "Estimated between cached model snapshots.",
+        },
+        "provenance": {
+            "observed_or_estimated": feature["properties"]["observed_or_estimated"],
+            "modelled_or_interpolated": feature["properties"]["modelled_or_interpolated"],
+            "computation_mode": feature["properties"]["computation_mode"],
+            "assumptions_version": feature["properties"]["assumptions_version"],
+        },
+    }
+
+
+@router.get("/api/compare/hottest")
+def compare_hottest(time: str = Query(..., description="09:00–17:00 in 30-minute increments")) -> dict:
+    """Compare de-duplicated exposure and modelled-priority leaders from cached records."""
+    snapshot = _risk_snapshot_or_503(time)
+    ranked = rank_hottest_and_highest_risk(snapshot["features"])
+
+    def summarized(feature: dict) -> dict:
+        drivers = build_risk_drivers(feature["properties"])
+        summary = street_summary(feature, drivers)
+        summary["street_name"] = _street_name(summary["directed_segment_ids"])
+        return summary
+
+    hottest, highest_risk = summarized(ranked["hottest"]), summarized(ranked["highest_risk"])
+    if hottest["canonical_street_key"] == highest_risk["canonical_street_key"]:
+        explanation = "The highest-exposure street is also the highest modelled-priority street at this time."
+    else:
+        explanation = (
+            f"The highest-exposure street has exposure {hottest['exposure_value']:.3f} and modelled priority {hottest['risk_score']:.1f}; "
+            f"the highest-priority street has exposure {highest_risk['exposure_value']:.3f}, "
+            f"{highest_risk['vulnerability_level'].lower()} estimated vulnerability, "
+            f"{highest_risk['cooling_access_level'].lower()} cooling-access penalty, and modelled priority {highest_risk['risk_score']:.1f}."
+        )
+    return {
+        "requested_time": time,
+        "hottest": hottest,
+        "highest_risk": highest_risk,
+        "hottest_tie_count": ranked["hottest_tie_count"],
+        "highest_risk_tie_count": ranked["highest_risk_tie_count"],
+        "explanation": explanation,
+        "metadata": snapshot["metadata"],
+    }
 
 
 @router.get("/api/exposure")

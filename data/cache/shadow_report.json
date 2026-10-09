@@ -1,5 +1,5 @@
 {
-  "config_version": "2026-10-09-prompt-4a-risk-backend",
+  "config_version": "2026-10-09-prompt-4b-risk-explainability",
   "computation_mode": "geometric",
   "representative_date": "2026-05-15",
   "timezone": "Asia/Kolkata",
@@ -14,7 +14,7 @@
         "timestamp": "2026-05-15T09:00:00+05:30"
       },
       "computation_mode": "geometric",
-      "config_version": "2026-10-09-prompt-4a-risk-backend",
+      "config_version": "2026-10-09-prompt-4b-risk-explainability",
       "estimated_height_building_count": 3793,
       "has_estimated_building_heights": true,
       "geometry_stats": {
@@ -24,7 +24,7 @@
         "invalid_streets_repaired": 0,
         "invalid_streets_skipped": 0
       },
-      "duration_seconds": 3.5744346000719815,
+      "duration_seconds": 3.4210826999042183,
       "shadow_count": 3793,
       "street_count": 940,
       "shade_fraction_min": 0.0,
@@ -40,7 +40,7 @@
         "timestamp": "2026-05-15T11:00:00+05:30"
       },
       "computation_mode": "geometric",
-      "config_version": "2026-10-09-prompt-4a-risk-backend",
+      "config_version": "2026-10-09-prompt-4b-risk-explainability",
       "estimated_height_building_count": 3793,
       "has_estimated_building_heights": true,
       "geometry_stats": {
@@ -50,7 +50,7 @@
         "invalid_streets_repaired": 0,
         "invalid_streets_skipped": 0
       },
-      "duration_seconds": 3.487161299912259,
+      "duration_seconds": 3.545408100122586,
       "shadow_count": 3793,
       "street_count": 940,
       "shade_fraction_min": 0.0,
@@ -66,7 +66,7 @@
         "timestamp": "2026-05-15T13:00:00+05:30"
       },
       "computation_mode": "geometric",
-      "config_version": "2026-10-09-prompt-4a-risk-backend",
+      "config_version": "2026-10-09-prompt-4b-risk-explainability",
       "estimated_height_building_count": 3793,
       "has_estimated_building_heights": true,
       "geometry_stats": {
@@ -76,7 +76,7 @@
         "invalid_streets_repaired": 0,
         "invalid_streets_skipped": 0
       },
-      "duration_seconds": 3.423847199883312,
+      "duration_seconds": 3.4970412999391556,
       "shadow_count": 3793,
       "street_count": 940,
       "shade_fraction_min": 0.0,
@@ -92,7 +92,7 @@
         "timestamp": "2026-05-15T15:00:00+05:30"
       },
       "computation_mode": "geometric",
-      "config_version": "2026-10-09-prompt-4a-risk-backend",
+      "config_version": "2026-10-09-prompt-4b-risk-explainability",
       "estimated_height_building_count": 3793,
       "has_estimated_building_heights": true,
       "geometry_stats": {
@@ -102,7 +102,7 @@
         "invalid_streets_repaired": 0,
         "invalid_streets_skipped": 0
       },
-      "duration_seconds": 3.58833759999834,
+      "duration_seconds": 3.578373899916187,
       "shadow_count": 3793,
       "street_count": 940,
       "shade_fraction_min": 0.0,
@@ -118,7 +118,7 @@
         "timestamp": "2026-05-15T17:00:00+05:30"
       },
       "computation_mode": "geometric",
-      "config_version": "2026-10-09-prompt-4a-risk-backend",
+      "config_version": "2026-10-09-prompt-4b-risk-explainability",
       "estimated_height_building_count": 3793,
       "has_estimated_building_heights": true,
       "geometry_stats": {
@@ -128,7 +128,7 @@
         "invalid_streets_repaired": 0,
         "invalid_streets_skipped": 0
       },
-      "duration_seconds": 3.7198535001371056,
+      "duration_seconds": 3.620539200026542,
       "shadow_count": 3793,
       "street_count": 940,
       "shade_fraction_min": 0.0,
@@ -136,5 +136,5 @@
       "shade_fraction_max": 1.0
     }
   },
-  "duration_seconds": 22.52592490008101
+  "duration_seconds": 22.234232700197026
 }

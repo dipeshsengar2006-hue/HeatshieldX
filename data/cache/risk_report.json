@@ -1,5 +1,5 @@
 {
-  "config_version": "2026-10-09-prompt-4a-risk-backend",
+  "config_version": "2026-10-09-prompt-4b-risk-explainability",
   "normalization_method": "min_max_global_all_canonical_snapshots",
   "normalization_scope": "GLOBAL_ALL_FIVE_CANONICAL_SNAPSHOTS",
   "vulnerability": {
@@ -30,7 +30,7 @@
         "HIGH": 0,
         "CRITICAL": 0
       },
-      "duration_seconds": 0.027362699853256345
+      "duration_seconds": 0.029042699839919806
     },
     "11:00": {
       "segment_count": 940,
@@ -43,7 +43,7 @@
         "HIGH": 24,
         "CRITICAL": 0
       },
-      "duration_seconds": 0.0280774999409914
+      "duration_seconds": 0.029101400170475245
     },
     "13:00": {
       "segment_count": 940,
@@ -56,7 +56,7 @@
         "HIGH": 94,
         "CRITICAL": 6
       },
-      "duration_seconds": 0.02573999995365739
+      "duration_seconds": 0.02730030007660389
     },
     "15:00": {
       "segment_count": 940,
@@ -69,7 +69,7 @@
         "HIGH": 62,
         "CRITICAL": 6
       },
-      "duration_seconds": 0.02589789987541735
+      "duration_seconds": 0.028273699805140495
     },
     "17:00": {
       "segment_count": 940,
@@ -82,7 +82,7 @@
         "HIGH": 4,
         "CRITICAL": 0
       },
-      "duration_seconds": 0.0288909999653697
+      "duration_seconds": 0.030259299790486693
     }
   },
   "vulnerability_stats": {
@@ -90,5 +90,5 @@
     "mean": 0.32197886329201963,
     "max": 1.0
   },
-  "duration_seconds": 15.132232700008899
+  "duration_seconds": 14.883408299880102
 }

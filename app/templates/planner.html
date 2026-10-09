@@ -7,7 +7,7 @@
     <link rel="stylesheet" href="/static/vendor/leaflet.css">
     <link rel="stylesheet" href="/static/css/base.css">
   </head>
-  <body data-lat="{{ demo_area.center_lat }}" data-lon="{{ demo_area.center_lon }}">
+  <body data-lat="{{ demo_area.center_lat }}" data-lon="{{ demo_area.center_lon }}" data-snapshot-date="{{ data_download_date }}">
     <header class="site-header">
       <a class="brand" href="/">HeatShield <span>X</span></a>
       <p>Hyperlocal Heat Risk Response</p>
@@ -17,17 +17,28 @@
       <section class="intro" aria-labelledby="page-title">
         <p class="eyebrow">Planner dashboard</p>
         <h1 id="page-title">{{ demo_area.name }}</h1>
-        <p>Cached streets, buildings, and modelled exposure. Risk and intervention layers are not active yet.</p>
+        <p>Cached street-level modelled prioritization with transparent estimated vulnerability and cooling-access inputs.</p>
       </section>
       {% if load_error %}
       <section class="notice notice-error" role="alert">{{ load_error }}</section>
       {% endif %}
-      <section class="map-panel" aria-label="Demo area streets and building footprints">
-        <div id="map" aria-label="Map of streets and building footprints"></div>
-        <aside class="map-legend" aria-label="Map legend">
-          <span><i class="legend-street"></i> Lower exposure</span>
-          <span><i class="legend-building"></i> Buildings</span>
-          <span><i class="legend-exposure"></i> Higher exposure</span>
+      <section class="risk-workspace" aria-label="Risk map and street explanation">
+        <section class="map-panel" aria-label="Demo area streets and building footprints">
+          <div id="map" aria-label="Map of streets and building footprints"></div>
+          <aside class="map-legend" aria-label="Modelled prioritization legend">
+            <strong>Modelled prioritization</strong>
+            <span><i class="legend-low"></i> LOW · 0–25</span>
+            <span><i class="legend-moderate"></i> MODERATE · 26–50</span>
+            <span><i class="legend-high"></i> HIGH · 51–75</span>
+            <span><i class="legend-critical"></i> CRITICAL · 76–100</span>
+            <small>Modelled prioritization, not a medical threshold.</small>
+            <label class="layer-toggle"><input id="buildings-toggle" type="checkbox" checked> Building footprints</label>
+          </aside>
+        </section>
+        <aside id="why-panel" class="why-panel" aria-labelledby="why-title" aria-live="polite">
+          <p class="eyebrow">Street explanation</p>
+          <h2 id="why-title">Select a street</h2>
+          <p class="panel-empty">Select a coloured street to view its modelled-priority drivers.</p>
         </aside>
       </section>
       <section class="exposure-control" aria-labelledby="exposure-title">
@@ -44,10 +55,12 @@
         <div class="exposure-meta">
           <span id="exposure-mode" class="mode-badge" data-mode="{{ exposure_mode }}">Loading exposure mode</span>
           <p id="exposure-status" class="exposure-status" aria-live="polite">Loading cached exposure.</p>
+          <button id="compare-hottest" class="secondary-button" type="button">Why not the hottest?</button>
         </div>
       </section>
+      <section id="comparison-panel" class="comparison-panel" hidden aria-live="polite"></section>
     </main>
-    <footer>Configuration {{ config_version }} · Source: © OpenStreetMap contributors</footer>
+    <footer>Configuration {{ config_version }} · Source: © OpenStreetMap contributors · Data download: {{ data_download_date }}</footer>
     <script src="/static/vendor/leaflet.js"></script>
     <script src="/static/js/planner.js"></script>
   </body>

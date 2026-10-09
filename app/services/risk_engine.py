@@ -87,6 +87,8 @@ def precompute_risk(config: AppConfig | None = None) -> dict[str, Any]:
             "length_m": exposure_properties.get("length_m"),
             "canonical_time": canonical_time,
             "exposure_value": exposure_properties["exposure_value"],
+            "shade_fraction": exposure_properties.get("shade_fraction", active_config.static_fallback_shade_factor),
+            "direct_exposure_fraction": exposure_properties.get("direct_exposure_fraction", 1.0 - active_config.static_fallback_shade_factor),
             "elderly_component": vulnerability_record["elderly_component"],
             "outdoor_worker_component": vulnerability_record["outdoor_worker_component"],
             "vulnerability_value": vulnerability_record["vulnerability_value"],

@@ -64,6 +64,8 @@ class AppConfig(BaseModel):
     walking_distance_factor: float = Field(ge=1)
     walking_distance_label: str
     risk_normalization_scope: str
+    explainability_level_thresholds: dict[str, tuple[float, float]]
+    explainability_dominant_driver_count: int = Field(ge=1, le=4)
     facility_tag_rules: dict[str, dict[str, tuple[str, ...]]]
     facility_classification_order: tuple[str, ...]
     osm_request_timeout_s: int
@@ -82,7 +84,7 @@ def get_config() -> AppConfig:
         raise ValueError("HEATSHIELD_EXPOSURE_MODE must be geometric or estimated.")
 
     return AppConfig(
-        version="2026-10-09-prompt-4a-risk-backend",
+        version="2026-10-09-prompt-4b-risk-explainability",
         demo_area=DemoArea(
             name="Rajwada-Sarafa demonstration area",
             city="Indore",
@@ -150,6 +152,13 @@ def get_config() -> AppConfig:
         walking_distance_factor=1.0,
         walking_distance_label="Shortest path across cached OSM street segments from a segment midpoint to the nearest facility snapped to the network; disconnected paths are unavailable.",
         risk_normalization_scope="GLOBAL_ALL_FIVE_CANONICAL_SNAPSHOTS",
+        explainability_level_thresholds={
+            "solar_exposure": (1 / 3, 2 / 3),
+            "shade": (1 / 3, 2 / 3),
+            "vulnerability": (1 / 3, 2 / 3),
+            "cooling_access_penalty": (1 / 3, 2 / 3),
+        },
+        explainability_dominant_driver_count=3,
         facility_tag_rules={
             "healthcare": {"amenity": ("hospital", "clinic")},
             "water": {
