@@ -70,22 +70,3 @@ def load_risk_snapshot(canonical_time: str, config: AppConfig | None = None) -> 
             "Run `python scripts/precompute_risk.py` after the required exposure cache is available."
         )
     return json.loads(path.read_text(encoding="utf-8"))
-
-
-def plan_cache_path(plan_id: str, config: AppConfig | None = None) -> Path:
-    """Return the versioned, on-disk cache path for one resource plan."""
-    active_config = config or get_config()
-    return active_config.cache_data_dir / "plans" / f"{plan_id}.json"
-
-
-def load_cached_plan(plan_id: str, config: AppConfig | None = None) -> dict | None:
-    """Load a precomputed plan when present; a missing plan is a normal cache miss."""
-    path = plan_cache_path(plan_id, config)
-    return json.loads(path.read_text(encoding="utf-8")) if path.exists() else None
-
-
-def store_cached_plan(plan_id: str, plan: dict, config: AppConfig | None = None) -> None:
-    """Persist a deterministic resource plan atomically enough for local demo use."""
-    path = plan_cache_path(plan_id, config)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(plan), encoding="utf-8")
