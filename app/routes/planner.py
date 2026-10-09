@@ -14,7 +14,7 @@ from pydantic import BaseModel, Field
 from app.config import get_config
 from app.i18n import CITIZEN_EN, CITIZEN_HI, validate_citizen_i18n
 from app.repositories.cache import cache_status, load_cached_geojson, load_exposure_snapshot, load_risk_snapshot, load_shadow_snapshot
-from app.services.explainability_engine import build_risk_drivers, deduplicate_risk_features, find_canonical_feature, rank_hottest_and_highest_risk, street_summary
+from app.services.explainability_engine import build_risk_drivers, deduplicate_risk_features, explain_segment_snapshot, find_canonical_feature, rank_hottest_and_highest_risk, street_summary
 from app.services.intervention_engine import get_plan, list_candidates, optimize_resources
 from app.services.risk_engine import normalize_with_bounds, risk_class
 from app.services.public_summary import PublicSummaryError, public_summary as build_public_summary
@@ -423,32 +423,12 @@ def segment_risk(segment_id: str, time: str = Query(..., description="09:00–17
 def segment_why(segment_id: str, time: str = Query(..., description="09:00–17:00 in 30-minute increments")) -> dict:
     """Return deterministic, source-grounded drivers for either street direction."""
     snapshot = _risk_snapshot_or_503(time)
-    feature = find_canonical_feature(snapshot["features"], segment_id)
-    if feature is None:
+    payload = explain_segment_snapshot(snapshot, segment_id)
+    if payload is None:
         raise HTTPException(status_code=404, detail=f"Segment '{segment_id}' is not present in the cached risk snapshot.")
-    drivers = build_risk_drivers(feature["properties"])
-    summary = street_summary(feature, drivers)
-    summary["street_name"] = _street_name(summary["directed_segment_ids"])
-    status = "Interpolated" if snapshot["metadata"]["modelled_or_interpolated"] == "INTERPOLATED" else "Modelled"
-    return {
-        "requested_time": time,
-        "street": summary,
-        "drivers": drivers["drivers"],
-        "dominant_driver_ids": drivers["dominant_driver_ids"],
-        "primary_drivers_sentence": drivers["primary_drivers_sentence"],
-        "status_labels": ["Observed", "Estimated", status],
-        "status_label_details": {
-            "Observed": "Street geometry and any recorded OSM facility data.",
-            "Estimated": "Density-based vulnerability proxy; not a population count.",
-            status: "Cached model output." if status == "Modelled" else "Estimated between cached model snapshots.",
-        },
-        "provenance": {
-            "observed_or_estimated": feature["properties"]["observed_or_estimated"],
-            "modelled_or_interpolated": feature["properties"]["modelled_or_interpolated"],
-            "computation_mode": feature["properties"]["computation_mode"],
-            "assumptions_version": feature["properties"]["assumptions_version"],
-        },
-    }
+    payload["street"]["street_name"] = _street_name(payload["street"]["directed_segment_ids"])
+    payload["requested_time"] = time
+    return payload
 
 
 @router.get("/api/compare/hottest")

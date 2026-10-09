@@ -7,6 +7,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.config import get_config
 from app.logging_config import configure_logging
+from app.routes.copilot import router as copilot_router
 from app.routes.planner import router as planner_router
 from app.services.routing_engine import warm_route_graph
 
@@ -15,11 +16,14 @@ configure_logging()
 app = FastAPI(title="HeatShield X", version="0.1.0")
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 app.include_router(planner_router)
+app.include_router(copilot_router)
 
 
 @app.exception_handler(RequestValidationError)
 async def citizen_validation_message(request: Request, exc: RequestValidationError) -> JSONResponse:
     """Attach a stable bilingual catalog id to public route/summary validation errors."""
+    if request.url.path == "/api/copilot":
+        return JSONResponse(status_code=422, content={"detail": "Invalid Copilot request."})
     if request.url.path in {"/api/routes", "/api/public/summary"}:
         message_id = "route_error_422" if request.url.path == "/api/routes" else "summary_error_area"
         return JSONResponse(

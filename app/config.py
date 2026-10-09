@@ -33,6 +33,8 @@ class AppConfig(BaseModel):
     minimum_building_count_for_shadow: int
     computation_mode: Literal["FULL", "SIMPLIFIED", "FALLBACK"]
     feature_flags: dict[str, bool]
+    copilot_intent_keywords: dict[str, dict[str, tuple[str, ...]]]
+    copilot_hinglish_markers: tuple[str, ...]
     data_source_metadata: dict[str, str]
     risk_normalization_method: str
     risk_class_ranges: dict[str, tuple[int, int]]
@@ -124,8 +126,47 @@ def get_config() -> AppConfig:
             "exposure_engine": True,
             "risk_engine": True,
             "routing": True,
-            "copilot": False,
+            "copilot": True,
+            "copilot_llm": False,
         },
+        copilot_intent_keywords={
+            "platform_guide": {
+                "en": ("how to use", "how do i", "what does the slider", "platform guide"),
+                "hi": ("कैसे उपयोग", "कैसे चलाएं", "मानचित्र कैसे", "स्लाइडर क्या"),
+                "hinglish": ("kaise use", "map kaise", "slider kaise", "platform kaise"),
+            },
+            "risk_explanation": {
+                "en": ("why is", "why this", "risk score", "high risk", "risk level"),
+                "hi": ("क्यों", "जोखिम", "जोखिम स्तर", "कारण बताएं"),
+                "hinglish": ("risk kyon", "high risk kyon", "ye street", "kyon high"),
+            },
+            "route_assistant": {
+                "en": ("route", "from ", " to ", "fastest way"),
+                "hi": ("मार्ग", "रास्ता", "जाना", "से "),
+                "hinglish": (" jaana", " se ", " raste", "route batao"),
+            },
+            "safe_stop_assistant": {
+                "en": ("break", "rest stop", "stop along", "place to rest"),
+                "hi": ("ठहराव", "विराम", "रुकने की जगह", "आराम की जगह"),
+                "hinglish": ("break lena", "break ke liye", "raaste mein ruk", "rest stop"),
+            },
+            "planner_assistant": {
+                "en": ("water point", "cooling centre", "cooling center", "shade structure", "resources"),
+                "hi": ("पानी के केंद्र", "पानी के स्थान", "शीतलन केंद्र", "छाया संरचना", "संसाधन"),
+                "hinglish": ("water points", "cooling centre", "cooling center", "shade structure", "mere paas"),
+            },
+            "data_transparency": {
+                "en": ("building height", "estimated", "proxy", "normalization", "temperature proxy", "data source"),
+                "hi": ("इमारत की ऊंचाई", "अनुमान कैसे", "प्रॉक्सी", "सामान्यीकरण", "तापमान का अनुमान"),
+                "hinglish": ("building height", "kaise estimate", "proxy kaise", "temperature proxy"),
+            },
+            "heat_safety": {
+                "en": ("heat safety", "heat guidance", "avoid heat", "hot on my route", "what should i do in heat", "hot hours", "feeling unwell", "dizzy", "fainted", "vomit", "confused"),
+                "hi": ("गर्मी से बचने", "गर्मी में क्या", "गर्मी के सुझाव", "चक्कर", "बेहोश", "उल्टी", "भ्रमित"),
+                "hinglish": ("garmi se bachne", "heat se bachne", "garmi mein kya", "chakkar", "behosh", "ulti", "confused"),
+            },
+        },
+        copilot_hinglish_markers=("se", "jaana", "mere paas", "kaise", "kya", "hai", "mujhe", "raste", "raaste"),
         data_source_metadata={
             "streets": "OpenStreetMap via OSMnx",
             "buildings": "OpenStreetMap via OSMnx",

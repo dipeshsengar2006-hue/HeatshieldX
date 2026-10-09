@@ -208,6 +208,40 @@ def street_summary(feature: dict[str, Any], drivers: dict[str, Any]) -> dict[str
     }
 
 
+def explain_segment_snapshot(
+    snapshot: dict[str, Any],
+    segment_id: str,
+    street_name: str | None = None,
+) -> dict[str, Any] | None:
+    """Build the shared WHY payload from one already selected risk snapshot."""
+    feature = find_canonical_feature(snapshot.get("features", []), segment_id)
+    if feature is None:
+        return None
+    drivers = build_risk_drivers(feature["properties"])
+    summary = street_summary(feature, drivers)
+    summary["street_name"] = street_name
+    status = "Interpolated" if snapshot["metadata"]["modelled_or_interpolated"] == "INTERPOLATED" else "Modelled"
+    return {
+        "requested_time": snapshot["metadata"].get("requested_time") or snapshot["metadata"].get("canonical_time"),
+        "street": summary,
+        "drivers": drivers["drivers"],
+        "dominant_driver_ids": drivers["dominant_driver_ids"],
+        "primary_drivers_sentence": drivers["primary_drivers_sentence"],
+        "status_labels": ["Observed", "Estimated", status],
+        "status_label_details": {
+            "Observed": "Street geometry and any recorded OSM facility data.",
+            "Estimated": "Density-based vulnerability proxy; not a population count.",
+            status: "Cached model output." if status == "Modelled" else "Estimated between cached model snapshots.",
+        },
+        "provenance": {
+            "observed_or_estimated": feature["properties"]["observed_or_estimated"],
+            "modelled_or_interpolated": feature["properties"]["modelled_or_interpolated"],
+            "computation_mode": feature["properties"]["computation_mode"],
+            "assumptions_version": feature["properties"]["assumptions_version"],
+        },
+    }
+
+
 def rank_hottest_and_highest_risk(features: list[dict[str, Any]]) -> dict[str, Any]:
     """Rank de-duplicated records with documented deterministic tie-breaking."""
     hottest_value = max(float(feature["properties"]["exposure_value"]) for feature in features)
