@@ -143,11 +143,16 @@ def test_stop_finder_uses_only_cached_osm_stops_and_network_detour(monkeypatch):
     assert result["status"] == "Available"
     assert result["items"][0]["stop_id"] == "osm-near"
     assert result["items"][0]["rating"] is None
-    assert result["items"][0]["sponsored_status"] is False
+    assert result["items"][0]["sponsored_status"] is True
     branch = next(stop for stop in result["items"] if stop["stop_id"] == "osm-branch")
     assert branch["name"] == "Unnamed water"
     assert branch["detour_distance"] == pytest.approx(240)
     assert 0 <= branch["route_relevance"] <= 1
+    ordered_ids = [stop["stop_id"] for stop in result["items"]]
+    stops["features"][0]["properties"]["sponsored_status"] = False
+    stops["features"][1]["properties"]["sponsored_status"] = True
+    reordered_flags = find_safe_stops(graph, fastest, get_config())
+    assert [stop["stop_id"] for stop in reordered_flags["items"]] == ordered_ids
 
 
 def test_stop_finder_missing_and_empty_cache_states(monkeypatch):

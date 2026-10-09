@@ -12,6 +12,7 @@ from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
 
 from app.config import get_config
+from app.i18n import CITIZEN_EN, validate_citizen_i18n
 from app.repositories.cache import cache_status, load_cached_geojson, load_exposure_snapshot, load_risk_snapshot, load_shadow_snapshot
 from app.services.explainability_engine import build_risk_drivers, deduplicate_risk_features, find_canonical_feature, rank_hottest_and_highest_risk, street_summary
 from app.services.intervention_engine import get_plan, list_candidates, optimize_resources
@@ -77,6 +78,20 @@ def _street_name(directed_segment_ids: list[str]) -> str | None:
     return None
 
 
+def _stop_cache_summary() -> dict[str, object]:
+    """Expose cache availability for the citizen view without fabricating stops."""
+    counts = {stop_type: 0 for stop_type in get_config().stop_type_priority}
+    try:
+        features = load_cached_geojson("stops").get("features", [])
+    except FileNotFoundError:
+        return {"available": False, "counts": counts}
+    for feature in features:
+        stop_type = feature.get("properties", {}).get("stop_type")
+        if stop_type in counts:
+            counts[stop_type] += 1
+    return {"available": True, "counts": counts}
+
+
 @router.get("/", response_class=HTMLResponse)
 def planner(request: Request) -> HTMLResponse:
     config = get_config()
@@ -98,6 +113,32 @@ def planner(request: Request) -> HTMLResponse:
             "resource_defaults": config.default_resource_counts,
             "data_download_date": _data_download_date(),
             "load_error": load_error,
+        },
+    )
+
+
+@router.get("/citizen", response_class=HTMLResponse)
+def citizen(request: Request) -> HTMLResponse:
+    """Render the English cache-only citizen routing view."""
+    validate_citizen_i18n()
+    config = get_config()
+    stop_summary = _stop_cache_summary()
+    demo_pairs = [
+        {"id": "kadavghat", "origin": {"lat": 22.7146202, "lon": 75.8542367}, "destination": {"lat": 22.7188165, "lon": 75.8553691}, "time": "09:00"},
+        {"id": "yashwant", "origin": {"lat": 22.7148593, "lon": 75.8549381}, "destination": {"lat": 22.7188165, "lon": 75.8553691}, "time": "09:00"},
+        {"id": "riverside", "origin": {"lat": 22.7188165, "lon": 75.8553691}, "destination": {"lat": 22.7189579, "lon": 75.8590870}, "time": "17:00"},
+    ]
+    return templates.TemplateResponse(
+        request,
+        "citizen.html",
+        {
+            "demo_area": config.demo_area,
+            "config_version": config.version,
+            "data_download_date": _data_download_date(),
+            "computation_mode": config.computation_mode,
+            "strings": CITIZEN_EN,
+            "demo_pairs": demo_pairs,
+            "stop_summary": stop_summary,
         },
     )
 

@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="{{ strings.meta_description }}">
+    <title>{{ strings.page_title }}</title>
+    <link rel="stylesheet" href="/static/vendor/leaflet.css">
+    <link rel="stylesheet" href="/static/css/base.css">
+    <link rel="stylesheet" href="/static/css/citizen.css">
+  </head>
+  <body class="citizen-page" data-lat="{{ demo_area.center_lat }}" data-lon="{{ demo_area.center_lon }}" data-route-api="/api/routes" data-places-api="/api/places" data-streets-api="/api/street-segments" data-data-date="{{ data_download_date }}" data-mode="{{ computation_mode|lower }}">
+    <header class="site-header citizen-header">
+      <a class="brand" href="/" aria-label="{{ strings.brand_name }}">{{ strings.brand_name }}</a>
+      <p>{{ strings.header_context }}</p>
+      <nav class="mode-switch" aria-label="{{ strings.nav_label }}">
+        <a href="/" aria-current="false">{{ strings.planner_page }}</a>
+        <a href="/citizen" aria-current="page">{{ strings.citizen_page }}</a>
+      </nav>
+    </header>
+
+    <main class="citizen-shell">
+      <section class="citizen-intro" aria-labelledby="citizen-title">
+        <p class="eyebrow">{{ strings.eyebrow }}</p>
+        <h1 id="citizen-title">{{ strings.title }}</h1>
+        <p>{{ strings.intro }}</p>
+        <span class="mode-badge" data-mode="{{ computation_mode|lower }}">{% if computation_mode == 'FALLBACK' %}{{ strings.mode_estimated }}{% else %}{{ strings.mode_geometric }}{% endif %}</span>
+      </section>
+
+      <section class="citizen-layout" aria-label="{{ strings.title }}">
+        <div class="citizen-map-column">
+          <section class="citizen-map-panel" aria-label="{{ strings.map_label }}">
+            <div id="citizen-map" role="application" aria-label="{{ strings.map_label }}"></div>
+            <p id="tile-notice" class="tile-notice" role="status" hidden>{{ strings.status_tile_error }}</p>
+            <div class="route-legend" aria-label="{{ strings.route_legend }}">
+              <span><i class="legend-fastest"></i>{{ strings.legend_fastest }}</span>
+              <span><i class="legend-heat"></i>{{ strings.legend_heat_aware }}</span>
+              <span><i class="legend-balanced"></i>{{ strings.legend_balanced }}</span>
+              <strong>{{ strings.stop_legend }}</strong>
+              <span><i class="legend-stop-water"></i>{{ strings.stop_type_water }}</span>
+              <span><i class="legend-stop-cooling"></i>{{ strings.stop_type_cooling }}</span>
+              <span><i class="legend-stop-shaded"></i>{{ strings.stop_type_shaded_public }}</span>
+              <span><i class="legend-stop-business"></i>{{ strings.stop_type_business }}</span>
+            </div>
+          </section>
+          <p class="map-note">{{ strings.map_fallback }}</p>
+        </div>
+
+        <div class="citizen-sheet">
+          <section class="route-form-panel" aria-labelledby="route-form-title">
+            <h2 id="route-form-title">{{ strings.route_planner_title }}</h2>
+            <form id="route-form" novalidate>
+              <div class="place-field">
+                <label for="origin-input">{{ strings.origin_label }}</label>
+                <div class="place-control">
+                  <input id="origin-input" type="search" autocomplete="off" maxlength="100" placeholder="{{ strings.origin_placeholder }}" aria-describedby="origin-results" required>
+                  <button id="pick-origin" class="pick-button" type="button">{{ strings.pick_origin }}</button>
+                </div>
+                <div id="origin-results" class="place-results" role="listbox" aria-label="{{ strings.place_search_label }}"></div>
+              </div>
+              <div class="place-field">
+                <label for="destination-input">{{ strings.destination_label }}</label>
+                <div class="place-control">
+                  <input id="destination-input" type="search" autocomplete="off" maxlength="100" placeholder="{{ strings.destination_placeholder }}" aria-describedby="destination-results" required>
+                  <button id="pick-destination" class="pick-button" type="button">{{ strings.pick_destination }}</button>
+                </div>
+                <div id="destination-results" class="place-results" role="listbox" aria-label="{{ strings.place_search_label }}"></div>
+              </div>
+              <div class="time-control">
+                <div class="time-heading">
+                  <label for="departure-slider">{{ strings.departure_time }}</label>
+                  <output id="departure-time" for="departure-slider">09:00</output>
+                </div>
+                <input id="departure-slider" type="range" min="540" max="1020" step="30" value="540" aria-describedby="time-status">
+                <div class="slider-ticks" aria-hidden="true"><span>09:00</span><span>11:00</span><span>13:00</span><span>15:00</span><span>17:00</span></div>
+                <span id="time-status" class="mode-badge">{{ strings.modelled }}</span>
+              </div>
+              <button id="find-routes" class="primary-button" type="submit">{{ strings.find_routes }}</button>
+              <p id="route-status" class="citizen-status" role="status" aria-live="polite">{{ strings.route_options_empty }}</p>
+            </form>
+            <div class="preset-block">
+              <h3>{{ strings.examples }}</h3>
+              <p>{{ strings.examples_note }}</p>
+              <div class="preset-list">
+                {% for preset in demo_pairs %}
+                <button type="button" class="preset-button" data-preset="{{ preset.id }}">
+                  {% if preset.id == 'kadavghat' %}{{ strings.preset_kadavghat }}{% elif preset.id == 'yashwant' %}{{ strings.preset_yashwant }}{% else %}{{ strings.preset_riverside }}{% endif %}
+                </button>
+                {% endfor %}
+              </div>
+            </div>
+          </section>
+
+          <section class="results-panel" aria-labelledby="route-options-title">
+            <h2 id="route-options-title">{{ strings.route_options }}</h2>
+            <div id="recommendation" class="recommendation" aria-live="polite" hidden></div>
+            <div id="route-cards" class="route-cards">
+              <p class="empty-state">{{ strings.route_options_empty }}</p>
+            </div>
+            <p class="modelled-note">{{ strings.modelled_estimate }}</p>
+          </section>
+
+          <section class="stops-panel" aria-labelledby="stops-title">
+            <h2 id="stops-title">{{ strings.stops_title }}</h2>
+            <div id="stop-list"><p class="empty-state">{{ strings.stops_empty }}</p></div>
+            <div class="stop-counts" aria-label="{{ strings.stops_title }}">
+              {% for stop_type, label_key in [('water', 'stop_type_water'), ('cooling', 'stop_type_cooling'), ('shaded_public', 'stop_type_shaded_public'), ('business', 'stop_type_business')] %}
+              <span>{{ strings[label_key] }}: {{ stop_summary.counts[stop_type] }}</span>
+              {% endfor %}
+            </div>
+          </section>
+
+          <details class="guidance-panel">
+            <summary>{{ strings.guidance_title }}</summary>
+            <ul>
+              <li>{{ strings.guidance_carry_water }}</li>
+              <li>{{ strings.guidance_prefer_shade }}</li>
+              <li>{{ strings.guidance_rest_cool }}</li>
+              <li>{{ strings.guidance_avoid_hottest }}</li>
+            </ul>
+          </details>
+        </div>
+      </section>
+    </main>
+
+    <footer>{{ strings.footer.format(config_version=config_version, data_download_date=data_download_date) }}</footer>
+    <script id="citizen-strings" type="application/json">{{ strings|tojson }}</script>
+    <script id="citizen-presets" type="application/json">{{ demo_pairs|tojson }}</script>
+    <script src="/static/vendor/leaflet.js"></script>
+    <script src="/static/js/citizen.js" defer></script>
+  </body>
+</html>

@@ -16,6 +16,7 @@ import networkx as nx
 from shapely.geometry import LineString, Point, shape
 
 from app.config import AppConfig, get_config
+from app.i18n import CITIZEN_EN
 from app.repositories.cache import load_cached_geojson, load_risk_snapshot
 from app.services.data_engine import project_to_metric_crs
 from app.services.stop_finder import find_safe_stops
@@ -58,6 +59,7 @@ class PathResult:
 
 
 _GRAPH_CACHE: dict[str, RouteGraph] = {}
+_FIRST_ROUTE_REQUEST = True
 
 
 def _node_key(point: Point) -> Node:
@@ -432,18 +434,34 @@ def _unique_paths(paths: list[PathResult], graph: RouteGraph, fastest: PathResul
     return routes
 
 
-def _recommendation(fastest: PathResult, heat_aware: PathResult) -> str:
-    if heat_aware.segment_ids == fastest.segment_ids:
-        return "No lower-exposure route found within the allowed detour."
+def _recommendation(fastest: PathResult, heat_aware: PathResult, config: AppConfig) -> str:
     change = (heat_aware.heat_cost - fastest.heat_cost) / fastest.heat_cost * 100 if fastest.heat_cost else 0.0
-    return (
-        f"Recommended heat-aware route: adds approximately {max(0, round((heat_aware.time_s - fastest.time_s) / 60))} minutes "
-        f"but has lower modelled heat exposure ({change:.0f}%)."
+    reduction = max(0.0, -change)
+    if reduction < config.min_heat_reduction_pct:
+        return CITIZEN_EN["recommendation_small"].format(percent=f"{reduction:.1f}")
+    return CITIZEN_EN["recommendation_heat"].format(
+        minutes=max(0, round((heat_aware.time_s - fastest.time_s) / 60)),
+        percent=f"{reduction:.1f}",
     )
+
+
+def warm_route_graph(config: AppConfig | None = None) -> float | None:
+    """Construct the cache-only graph during startup so the first request is warm."""
+    active_config = config or get_config()
+    started = time.perf_counter()
+    try:
+        graph = get_route_graph(active_config)
+    except (FileNotFoundError, RoutingError) as exc:
+        LOGGER.warning("Routing graph warm-up unavailable: %s", exc)
+        return None
+    duration_s = time.perf_counter() - started
+    LOGGER.info("Routing graph warmed in %.3fs: nodes=%s segments=%s", duration_s, graph.graph.number_of_nodes(), graph.graph.number_of_edges())
+    return duration_s
 
 
 def route_request(origin: tuple[float, float], destination: tuple[float, float], time_value: str, config: AppConfig | None = None) -> dict[str, Any]:
     """Return deterministic unique route choices from only cached source/model data."""
+    global _FIRST_ROUTE_REQUEST
     active_config = config or get_config()
     started = time.perf_counter()
     graph = get_route_graph(active_config)
@@ -460,10 +478,14 @@ def route_request(origin: tuple[float, float], destination: tuple[float, float],
     if balanced.route_type != "BALANCED":
         balanced = replace(balanced, route_type="BALANCED")
     routes = _unique_paths([fastest, heat_aware, balanced], graph, fastest, metadata, _recorded_access_available(active_config), active_config)
-    LOGGER.info("Routing completed in %.3fs: unique_routes=%s segments=%s interpolated=%s", time.perf_counter() - started, len(routes), sum(len(route["segment_ids"]) for route in routes), metadata["interpolated"])
+    elapsed = time.perf_counter() - started
+    LOGGER.info("Routing completed in %.3fs: unique_routes=%s segments=%s interpolated=%s", elapsed, len(routes), sum(len(route["segment_ids"]) for route in routes), metadata["interpolated"])
+    if _FIRST_ROUTE_REQUEST:
+        LOGGER.info("First route request completed in %.3fs", elapsed)
+        _FIRST_ROUTE_REQUEST = False
     return {
         "routes": routes,
-        "recommendation": _recommendation(fastest, heat_aware),
+        "recommendation": _recommendation(fastest, heat_aware, active_config),
         "requested_time": time_value,
         "snapped_endpoints": {"origin": snapped_origin, "destination": snapped_destination},
         "graph_report": {

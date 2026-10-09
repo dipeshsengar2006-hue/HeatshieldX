@@ -73,7 +73,7 @@ def find_safe_stops(graph: RouteGraph, path: PathResult, config: AppConfig) -> d
             "amenities": _amenities(properties),
             "rating": None,
             "rating_label": "Rating unavailable",
-            "sponsored_status": False,
+            "sponsored_status": properties.get("sponsored_status") is True,
             "route_relevance": relevance,
             "provenance": {
                 "source_type": properties.get("source_type", "osm"),

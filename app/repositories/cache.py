@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 
 from app.config import AppConfig, get_config
 
@@ -29,6 +30,29 @@ def cache_status(config: AppConfig | None = None) -> dict[str, bool]:
         "buildings": cache_path("buildings", config).exists(),
         "facilities": cache_path("facilities", config).exists(),
     }
+
+
+def _plan_cache_path(plan_id: str, config: AppConfig | None = None) -> Path:
+    """Resolve a plan id to a JSON file below the configured cache directory."""
+    if not plan_id or Path(plan_id).name != plan_id:
+        raise ValueError("Plan id must be a single filename component.")
+    active_config = config or get_config()
+    return active_config.cache_data_dir / "plans" / f"{plan_id}.json"
+
+
+def load_cached_plan(plan_id: str, config: AppConfig | None = None) -> dict[str, Any] | None:
+    """Return a cached plan when present, otherwise let the caller calculate it."""
+    path = _plan_cache_path(plan_id, config)
+    if not path.exists():
+        return None
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def store_cached_plan(plan_id: str, plan: dict[str, Any], config: AppConfig | None = None) -> None:
+    """Persist a deterministic plan under the configured cache directory."""
+    path = _plan_cache_path(plan_id, config)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(plan, ensure_ascii=False), encoding="utf-8")
 
 
 def load_shadow_snapshot(kind: str, canonical_time: str, config: AppConfig | None = None) -> dict:
