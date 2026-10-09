@@ -3,87 +3,110 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="description" content="{{ strings.meta_description }}">
+    <meta name="description" content="{{ strings.meta_description }}" data-i18n-content="meta_description">
     <title>{{ strings.page_title }}</title>
     <link rel="stylesheet" href="/static/vendor/leaflet.css">
     <link rel="stylesheet" href="/static/css/base.css">
     <link rel="stylesheet" href="/static/css/citizen.css">
   </head>
-  <body class="citizen-page" data-lat="{{ demo_area.center_lat }}" data-lon="{{ demo_area.center_lon }}" data-route-api="/api/routes" data-places-api="/api/places" data-streets-api="/api/street-segments" data-data-date="{{ data_download_date }}" data-mode="{{ computation_mode|lower }}">
+  <body class="citizen-page" data-lat="{{ demo_area.center_lat }}" data-lon="{{ demo_area.center_lon }}" data-route-api="/api/routes" data-places-api="/api/places" data-summary-api="/api/public/summary" data-streets-api="/api/street-segments" data-data-date="{{ data_download_date }}" data-mode="{{ computation_mode|lower }}" data-min-heat-reduction-pct="{{ min_heat_reduction_pct }}">
     <header class="site-header citizen-header">
-      <a class="brand" href="/" aria-label="{{ strings.brand_name }}">{{ strings.brand_name }}</a>
-      <p>{{ strings.header_context }}</p>
+      <a class="brand" href="/" aria-label="{{ strings.brand_name }}" data-i18n="brand_name" data-i18n-aria-label="brand_name">{{ strings.brand_name }}</a>
+      <p data-i18n="header_context">{{ strings.header_context }}</p>
       <nav class="mode-switch" aria-label="{{ strings.nav_label }}">
-        <a href="/" aria-current="false">{{ strings.planner_page }}</a>
-        <a href="/citizen" aria-current="page">{{ strings.citizen_page }}</a>
+        <a href="/" aria-current="false" data-i18n="planner_page">{{ strings.planner_page }}</a>
+        <a href="/citizen" aria-current="page" data-i18n="citizen_page">{{ strings.citizen_page }}</a>
       </nav>
+      <div class="language-switch" role="group" aria-label="{{ strings.language_label }}" data-i18n-aria-label="language_label">
+        <button id="language-en" type="button" data-language="en" aria-pressed="true" data-i18n="language_english">{{ strings.language_english }}</button>
+        <span aria-hidden="true">|</span>
+        <button id="language-hi" type="button" data-language="hi" aria-pressed="false" data-i18n="language_hindi">{{ strings.language_hindi }}</button>
+      </div>
     </header>
 
     <main class="citizen-shell">
       <section class="citizen-intro" aria-labelledby="citizen-title">
-        <p class="eyebrow">{{ strings.eyebrow }}</p>
-        <h1 id="citizen-title">{{ strings.title }}</h1>
-        <p>{{ strings.intro }}</p>
-        <span class="mode-badge" data-mode="{{ computation_mode|lower }}">{% if computation_mode == 'FALLBACK' %}{{ strings.mode_estimated }}{% else %}{{ strings.mode_geometric }}{% endif %}</span>
+        <p class="eyebrow" data-i18n="eyebrow">{{ strings.eyebrow }}</p>
+        <h1 id="citizen-title" data-i18n="title">{{ strings.title }}</h1>
+        <p data-i18n="intro">{{ strings.intro }}</p>
+        {% set mode_id = 'mode_estimated' if computation_mode == 'FALLBACK' else 'mode_geometric' %}
+        <span class="mode-badge" data-mode="{{ computation_mode|lower }}" data-i18n="{{ mode_id }}">{{ strings[mode_id] }}</span>
       </section>
 
-      <section class="citizen-layout" aria-label="{{ strings.title }}">
+      <section id="summary-card" class="summary-card" aria-labelledby="summary-title" aria-live="polite">
+        <h2 id="summary-title" data-i18n="summary_title">{{ strings.summary_title }}</h2>
+        <p id="summary-peak" class="summary-peak" data-i18n="summary_loading">{{ strings.summary_loading }}</p>
+        <small id="summary-peak-status" class="summary-status"></small>
+        <div id="summary-location-fields" class="summary-location-fields" hidden>
+          <div class="summary-level-wrap">
+            <span class="summary-label" data-i18n="summary_exposure_label">{{ strings.summary_exposure_label }}</span>
+            <strong id="summary-level" class="summary-level">—</strong>
+            <span id="summary-level-status" class="summary-status"></span>
+          </div>
+          <div class="summary-distance"><span data-i18n="summary_water_label">{{ strings.summary_water_label }}</span><strong id="summary-water">—</strong><small id="summary-water-status"></small></div>
+          <div class="summary-distance"><span data-i18n="summary_cooling_label">{{ strings.summary_cooling_label }}</span><strong id="summary-cooling">—</strong><small id="summary-cooling-status"></small></div>
+        </div>
+        <p id="summary-route-note" class="summary-route-note" hidden></p>
+        <p id="summary-status" class="summary-status-line" role="status"></p>
+      </section>
+
+      <section class="citizen-layout" aria-label="{{ strings.title }}" data-i18n-aria-label="title">
         <div class="citizen-map-column">
-          <section class="citizen-map-panel" aria-label="{{ strings.map_label }}">
-            <div id="citizen-map" role="application" aria-label="{{ strings.map_label }}"></div>
-            <p id="tile-notice" class="tile-notice" role="status" hidden>{{ strings.status_tile_error }}</p>
-            <div class="route-legend" aria-label="{{ strings.route_legend }}">
-              <span><i class="legend-fastest"></i>{{ strings.legend_fastest }}</span>
-              <span><i class="legend-heat"></i>{{ strings.legend_heat_aware }}</span>
-              <span><i class="legend-balanced"></i>{{ strings.legend_balanced }}</span>
-              <strong>{{ strings.stop_legend }}</strong>
-              <span><i class="legend-stop-water"></i>{{ strings.stop_type_water }}</span>
-              <span><i class="legend-stop-cooling"></i>{{ strings.stop_type_cooling }}</span>
-              <span><i class="legend-stop-shaded"></i>{{ strings.stop_type_shaded_public }}</span>
-              <span><i class="legend-stop-business"></i>{{ strings.stop_type_business }}</span>
+          <section class="citizen-map-panel" aria-label="{{ strings.map_label }}" data-i18n-aria-label="map_label">
+            <div id="citizen-map" role="application" aria-label="{{ strings.map_label }}" data-i18n-aria-label="map_label"></div>
+            <p id="tile-notice" class="tile-notice" role="status" hidden data-i18n="status_tile_error">{{ strings.status_tile_error }}</p>
+            <div class="route-legend" aria-label="{{ strings.route_legend }}" data-i18n-aria-label="route_legend">
+              <span><i class="legend-fastest"></i><span data-i18n="legend_fastest">{{ strings.legend_fastest }}</span></span>
+              <span><i class="legend-heat"></i><span data-i18n="legend_heat_aware">{{ strings.legend_heat_aware }}</span></span>
+              <span><i class="legend-balanced"></i><span data-i18n="legend_balanced">{{ strings.legend_balanced }}</span></span>
+              <strong data-i18n="stop_legend">{{ strings.stop_legend }}</strong>
+              <span><i class="legend-stop-water"></i><span data-i18n="stop_type_water">{{ strings.stop_type_water }}</span></span>
+              <span><i class="legend-stop-cooling"></i><span data-i18n="stop_type_cooling">{{ strings.stop_type_cooling }}</span></span>
+              <span><i class="legend-stop-shaded"></i><span data-i18n="stop_type_shaded_public">{{ strings.stop_type_shaded_public }}</span></span>
+              <span><i class="legend-stop-business"></i><span data-i18n="stop_type_business">{{ strings.stop_type_business }}</span></span>
             </div>
           </section>
-          <p class="map-note">{{ strings.map_fallback }}</p>
+          <p class="map-note" data-i18n="map_fallback">{{ strings.map_fallback }}</p>
         </div>
 
         <div class="citizen-sheet">
           <section class="route-form-panel" aria-labelledby="route-form-title">
-            <h2 id="route-form-title">{{ strings.route_planner_title }}</h2>
+            <h2 id="route-form-title" data-i18n="route_planner_title">{{ strings.route_planner_title }}</h2>
             <form id="route-form" novalidate>
               <div class="place-field">
-                <label for="origin-input">{{ strings.origin_label }}</label>
+                <label for="origin-input" data-i18n="origin_label">{{ strings.origin_label }}</label>
                 <div class="place-control">
-                  <input id="origin-input" type="search" autocomplete="off" maxlength="100" placeholder="{{ strings.origin_placeholder }}" aria-describedby="origin-results" required>
-                  <button id="pick-origin" class="pick-button" type="button">{{ strings.pick_origin }}</button>
+                  <input id="origin-input" type="search" autocomplete="off" maxlength="100" placeholder="{{ strings.origin_placeholder }}" data-i18n-placeholder="origin_placeholder" aria-describedby="origin-results" required>
+                  <button id="pick-origin" class="pick-button" type="button" data-i18n="pick_origin">{{ strings.pick_origin }}</button>
                 </div>
-                <div id="origin-results" class="place-results" role="listbox" aria-label="{{ strings.place_search_label }}"></div>
+                <div id="origin-results" class="place-results" role="listbox" aria-label="{{ strings.place_search_label }}" data-i18n-aria-label="place_search_label"></div>
               </div>
               <div class="place-field">
-                <label for="destination-input">{{ strings.destination_label }}</label>
+                <label for="destination-input" data-i18n="destination_label">{{ strings.destination_label }}</label>
                 <div class="place-control">
-                  <input id="destination-input" type="search" autocomplete="off" maxlength="100" placeholder="{{ strings.destination_placeholder }}" aria-describedby="destination-results" required>
-                  <button id="pick-destination" class="pick-button" type="button">{{ strings.pick_destination }}</button>
+                  <input id="destination-input" type="search" autocomplete="off" maxlength="100" placeholder="{{ strings.destination_placeholder }}" data-i18n-placeholder="destination_placeholder" aria-describedby="destination-results" required>
+                  <button id="pick-destination" class="pick-button" type="button" data-i18n="pick_destination">{{ strings.pick_destination }}</button>
                 </div>
-                <div id="destination-results" class="place-results" role="listbox" aria-label="{{ strings.place_search_label }}"></div>
+                <div id="destination-results" class="place-results" role="listbox" aria-label="{{ strings.place_search_label }}" data-i18n-aria-label="place_search_label"></div>
               </div>
               <div class="time-control">
                 <div class="time-heading">
-                  <label for="departure-slider">{{ strings.departure_time }}</label>
+                  <label for="departure-slider" data-i18n="departure_time">{{ strings.departure_time }}</label>
                   <output id="departure-time" for="departure-slider">09:00</output>
                 </div>
                 <input id="departure-slider" type="range" min="540" max="1020" step="30" value="540" aria-describedby="time-status">
                 <div class="slider-ticks" aria-hidden="true"><span>09:00</span><span>11:00</span><span>13:00</span><span>15:00</span><span>17:00</span></div>
-                <span id="time-status" class="mode-badge">{{ strings.modelled }}</span>
+                <span id="time-status" class="mode-badge" data-i18n="modelled">{{ strings.modelled }}</span>
               </div>
-              <button id="find-routes" class="primary-button" type="submit">{{ strings.find_routes }}</button>
-              <p id="route-status" class="citizen-status" role="status" aria-live="polite">{{ strings.route_options_empty }}</p>
+              <button id="find-routes" class="primary-button" type="submit" data-i18n="find_routes">{{ strings.find_routes }}</button>
+              <p id="route-status" class="citizen-status" role="status" aria-live="polite" data-i18n="route_options_empty">{{ strings.route_options_empty }}</p>
             </form>
             <div class="preset-block">
-              <h3>{{ strings.examples }}</h3>
-              <p>{{ strings.examples_note }}</p>
+              <h3 data-i18n="examples">{{ strings.examples }}</h3>
+              <p data-i18n="examples_note">{{ strings.examples_note }}</p>
               <div class="preset-list">
                 {% for preset in demo_pairs %}
-                <button type="button" class="preset-button" data-preset="{{ preset.id }}">
+                <button type="button" class="preset-button" data-preset="{{ preset.id }}" data-i18n="preset_{{ preset.id }}">
                   {% if preset.id == 'kadavghat' %}{{ strings.preset_kadavghat }}{% elif preset.id == 'yashwant' %}{{ strings.preset_yashwant }}{% else %}{{ strings.preset_riverside }}{% endif %}
                 </button>
                 {% endfor %}
@@ -92,39 +115,39 @@
           </section>
 
           <section class="results-panel" aria-labelledby="route-options-title">
-            <h2 id="route-options-title">{{ strings.route_options }}</h2>
+            <h2 id="route-options-title" data-i18n="route_options">{{ strings.route_options }}</h2>
             <div id="recommendation" class="recommendation" aria-live="polite" hidden></div>
             <div id="route-cards" class="route-cards">
-              <p class="empty-state">{{ strings.route_options_empty }}</p>
+              <p class="empty-state" data-i18n="route_options_empty">{{ strings.route_options_empty }}</p>
             </div>
-            <p class="modelled-note">{{ strings.modelled_estimate }}</p>
+            <p class="modelled-note" data-i18n="modelled_estimate">{{ strings.modelled_estimate }}</p>
           </section>
 
           <section class="stops-panel" aria-labelledby="stops-title">
-            <h2 id="stops-title">{{ strings.stops_title }}</h2>
-            <div id="stop-list"><p class="empty-state">{{ strings.stops_empty }}</p></div>
-            <div class="stop-counts" aria-label="{{ strings.stops_title }}">
+            <h2 id="stops-title" data-i18n="stops_title">{{ strings.stops_title }}</h2>
+            <div id="stop-list"><p class="empty-state" data-i18n="stops_empty">{{ strings.stops_empty }}</p></div>
+            <div class="stop-counts" aria-label="{{ strings.stops_title }}" data-i18n-aria-label="stops_title">
               {% for stop_type, label_key in [('water', 'stop_type_water'), ('cooling', 'stop_type_cooling'), ('shaded_public', 'stop_type_shaded_public'), ('business', 'stop_type_business')] %}
-              <span>{{ strings[label_key] }}: {{ stop_summary.counts[stop_type] }}</span>
+              <span><span data-i18n="{{ label_key }}">{{ strings[label_key] }}</span>: {{ stop_summary.counts[stop_type] }}</span>
               {% endfor %}
             </div>
           </section>
 
           <details class="guidance-panel">
-            <summary>{{ strings.guidance_title }}</summary>
+            <summary data-i18n="guidance_title">{{ strings.guidance_title }}</summary>
             <ul>
-              <li>{{ strings.guidance_carry_water }}</li>
-              <li>{{ strings.guidance_prefer_shade }}</li>
-              <li>{{ strings.guidance_rest_cool }}</li>
-              <li>{{ strings.guidance_avoid_hottest }}</li>
+              <li data-i18n="guidance_carry_water">{{ strings.guidance_carry_water }}</li>
+              <li data-i18n="guidance_prefer_shade">{{ strings.guidance_prefer_shade }}</li>
+              <li data-i18n="guidance_rest_cool">{{ strings.guidance_rest_cool }}</li>
+              <li data-i18n="guidance_avoid_hottest">{{ strings.guidance_avoid_hottest }}</li>
             </ul>
           </details>
         </div>
       </section>
     </main>
 
-    <footer>{{ strings.footer.format(config_version=config_version, data_download_date=data_download_date) }}</footer>
-    <script id="citizen-strings" type="application/json">{{ strings|tojson }}</script>
+    <footer id="citizen-footer" data-i18n="footer" data-config-version="{{ config_version }}" data-data-date="{{ data_download_date }}">{{ strings.footer.format(config_version=config_version, data_download_date=data_download_date) }}</footer>
+    <script id="citizen-catalogs" type="application/json">{{ {"en": strings, "hi": hindi_strings}|tojson }}</script>
     <script id="citizen-presets" type="application/json">{{ demo_pairs|tojson }}</script>
     <script src="/static/vendor/leaflet.js"></script>
     <script src="/static/js/citizen.js" defer></script>

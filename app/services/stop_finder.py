@@ -10,6 +10,7 @@ import networkx as nx
 from shapely.geometry import LineString, Point, shape
 
 from app.config import AppConfig
+from app.i18n import CITIZEN_EN
 from app.repositories.cache import load_cached_geojson
 
 if TYPE_CHECKING:
@@ -34,7 +35,7 @@ def find_safe_stops(graph: RouteGraph, path: PathResult, config: AppConfig) -> d
     try:
         features = load_cached_geojson("stops", config).get("features", [])
     except FileNotFoundError:
-        return {"status": "No stop data available", "items": []}
+        return {"status": CITIZEN_EN["stops_unavailable"], "status_message_id": "stops_unavailable", "status_message_params": {}, "items": []}
 
     route_points = [graph.metric_nodes[node] for node in path.nodes]
     route_geometry = LineString(route_points) if len(route_points) > 1 else route_points[0]
@@ -65,14 +66,20 @@ def find_safe_stops(graph: RouteGraph, path: PathResult, config: AppConfig) -> d
         candidates.append({
             "stop_id": str(properties["stop_id"]),
             "stop_type": stop_type,
+            "stop_type_message_id": f"stop_type_{stop_type}" if f"stop_type_{stop_type}" in CITIZEN_EN else "stop_type_other",
+            "stop_type_message_params": {},
             "name": display_name,
             "location": {"type": "Point", "coordinates": [float(source_point.x), float(source_point.y)]},
             "route_distance": route_distance,
             "detour_distance": 2 * float(network_distance),
             "verified_status": "Unverified (OSM)",
+            "verified_status_message_id": "verified_status",
+            "verified_status_message_params": {},
             "amenities": _amenities(properties),
             "rating": None,
             "rating_label": "Rating unavailable",
+            "rating_message_id": "rating_unavailable",
+            "rating_message_params": {},
             "sponsored_status": properties.get("sponsored_status") is True,
             "route_relevance": relevance,
             "provenance": {
@@ -93,7 +100,10 @@ def find_safe_stops(graph: RouteGraph, path: PathResult, config: AppConfig) -> d
             item["stop_id"],
         )
     )
+    status_id = "stops_available" if candidates else "stops_no_eligible"
     return {
-        "status": "Available" if candidates else "No eligible stops recorded in OSM along this route",
+        "status": CITIZEN_EN[status_id],
+        "status_message_id": status_id,
+        "status_message_params": {},
         "items": candidates[: config.stop_max_results],
     }

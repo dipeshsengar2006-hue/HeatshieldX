@@ -46,6 +46,7 @@ class AppConfig(BaseModel):
     snap_max_distance_m: float = Field(gt=0)
     heat_aware_max_detour_ratio: float = Field(ge=0)
     min_heat_reduction_pct: float = Field(ge=0, le=100)
+    peak_window_ratio: float = Field(gt=0, le=1)
     routing_assumption_label: str
     stop_max_route_distance_m: float = Field(gt=0)
     stop_max_results: int = Field(gt=0)
@@ -144,6 +145,7 @@ def get_config() -> AppConfig:
         snap_max_distance_m=100.0,
         heat_aware_max_detour_ratio=0.35,
         min_heat_reduction_pct=5.0,
+        peak_window_ratio=0.9,
         routing_assumption_label=(
             "Prototype routing assumption: the cached exposure, shade, and access values at the "
             "departure time are applied to every segment for the whole route; conditions do not evolve during travel."

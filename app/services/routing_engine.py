@@ -188,8 +188,14 @@ def routing_snapshot(time_value: str, config: AppConfig | None = None) -> tuple[
         "requested_time": time_value,
         "interpolated": interpolated,
         "modelled_or_interpolated": "INTERPOLATED" if interpolated else "MODELLED",
+        "modelled_or_interpolated_message_id": "summary_status_interpolated" if interpolated else "summary_status_modelled",
+        "modelled_or_interpolated_message_params": {},
         "observed_or_estimated": "ESTIMATED",
+        "observed_or_estimated_message_id": "summary_status_estimated",
+        "observed_or_estimated_message_params": {},
         "computation_mode": metadata["computation_mode"],
+        "computation_mode_message_id": "mode_estimated" if metadata["computation_mode"] == "FALLBACK" else "mode_geometric",
+        "computation_mode_message_params": {},
         "config_version": metadata["config_version"],
     }
 
@@ -388,8 +394,16 @@ def _recorded_access_available(config: AppConfig) -> bool:
 
 def _serialise_path(path: PathResult, fastest: PathResult, metadata: dict[str, Any], access_available: bool, config: AppConfig) -> dict[str, Any]:
     heat_change = 0.0 if fastest.heat_cost == 0 else ((path.heat_cost - fastest.heat_cost) / fastest.heat_cost) * 100
+    route_type_message_id = {
+        "FASTEST": "card_fastest",
+        "HEAT_AWARE": "card_heat_aware",
+        "BALANCED": "card_balanced",
+    }[path.route_type]
+    status_message_id = "summary_status_interpolated" if metadata["modelled_or_interpolated"] == "INTERPOLATED" else "summary_status_modelled"
     return {
         "route_type": path.route_type,
+        "route_type_message_id": route_type_message_id,
+        "route_type_message_params": {},
         "same_as": [],
         "geometry": {"type": "LineString", "coordinates": [list(item) for item in path.coordinates]},
         "segment_ids": list(path.segment_ids),
@@ -401,11 +415,24 @@ def _serialise_path(path: PathResult, fastest: PathResult, metadata: dict[str, A
         "weighted_shade": path.weighted_shade,
         "average_access_penalty": path.average_access_penalty,
         "cooling_access": path.average_access_penalty if access_available else "Data unavailable (no recorded facility)",
+        "cooling_access_message_id": "cooling_access" if access_available else "cooling_unavailable",
+        "cooling_access_message_params": {"value": path.average_access_penalty} if access_available else {},
         "classification_vs_fastest": {
             "extra_minutes": (path.time_s - fastest.time_s) / 60,
             "modelled_heat_exposure_change_percent": heat_change,
         },
-        "labels": {"impact": "MODELLED", "time_status": metadata["modelled_or_interpolated"]},
+        "labels": {
+            "impact": "MODELLED",
+            "impact_message_id": "summary_status_modelled",
+            "impact_message_params": {},
+            "time_status": metadata["modelled_or_interpolated"],
+            "time_status_message_id": status_message_id,
+            "time_status_message_params": {},
+        },
+        "modelled_or_interpolated_message_id": status_message_id,
+        "modelled_or_interpolated_message_params": {},
+        "computation_mode_message_id": "mode_estimated" if config.computation_mode == "FALLBACK" else "mode_geometric",
+        "computation_mode_message_params": {},
         "computation_mode": metadata["computation_mode"],
         "provenance": {
             "source_type": "derived",
@@ -431,18 +458,45 @@ def _unique_paths(paths: list[PathResult], graph: RouteGraph, fastest: PathResul
         record["stops"] = find_safe_stops(graph, path, config)
         seen[signature] = record
         routes.append(record)
+    for record in routes:
+        record["same_as_messages"] = [
+            {
+                "route_type": route_type,
+                "route_type_message_id": {
+                    "FASTEST": "card_fastest",
+                    "HEAT_AWARE": "card_heat_aware",
+                    "BALANCED": "card_balanced",
+                }[route_type],
+                "text": CITIZEN_EN["same_route_fastest"],
+                "message_id": "same_route_fastest",
+                "message_params": {},
+            }
+            for route_type in record["same_as"]
+        ]
     return routes
 
 
 def _recommendation(fastest: PathResult, heat_aware: PathResult, config: AppConfig) -> str:
+    return _recommendation_message(fastest, heat_aware, config)["text"]
+
+
+def _recommendation_message(fastest: PathResult, heat_aware: PathResult, config: AppConfig) -> dict[str, Any]:
     change = (heat_aware.heat_cost - fastest.heat_cost) / fastest.heat_cost * 100 if fastest.heat_cost else 0.0
     reduction = max(0.0, -change)
     if reduction < config.min_heat_reduction_pct:
-        return CITIZEN_EN["recommendation_small"].format(percent=f"{reduction:.1f}")
-    return CITIZEN_EN["recommendation_heat"].format(
-        minutes=max(0, round((heat_aware.time_s - fastest.time_s) / 60)),
-        percent=f"{reduction:.1f}",
-    )
+        message_id = "recommendation_small"
+        params = {"percent": f"{reduction:.1f}"}
+    else:
+        message_id = "recommendation_heat"
+        params = {
+            "minutes": max(0, round((heat_aware.time_s - fastest.time_s) / 60)),
+            "percent": f"{reduction:.1f}",
+        }
+    return {
+        "text": CITIZEN_EN[message_id].format(**params),
+        "message_id": message_id,
+        "message_params": params,
+    }
 
 
 def warm_route_graph(config: AppConfig | None = None) -> float | None:
@@ -483,9 +537,12 @@ def route_request(origin: tuple[float, float], destination: tuple[float, float],
     if _FIRST_ROUTE_REQUEST:
         LOGGER.info("First route request completed in %.3fs", elapsed)
         _FIRST_ROUTE_REQUEST = False
-    return {
+    recommendation = _recommendation_message(fastest, heat_aware, active_config)
+    response = {
         "routes": routes,
-        "recommendation": _recommendation(fastest, heat_aware, active_config),
+        "recommendation": recommendation["text"],
+        "recommendation_message_id": recommendation["message_id"],
+        "recommendation_message_params": recommendation["message_params"],
         "requested_time": time_value,
         "snapped_endpoints": {"origin": snapped_origin, "destination": snapped_destination},
         "graph_report": {
@@ -497,6 +554,18 @@ def route_request(origin: tuple[float, float], destination: tuple[float, float],
         "assumption_label": active_config.routing_assumption_label,
         "metadata": metadata,
     }
+    reduction_pct = max(0.0, (fastest.heat_cost - heat_aware.heat_cost) / fastest.heat_cost * 100) if fastest.heat_cost else 0.0
+    if reduction_pct >= active_config.min_heat_reduction_pct:
+        response["lower_exposure_route_available"] = {
+            "value": True,
+            "message_id": "summary_lower_route",
+            "message_params": {},
+            "english_text": CITIZEN_EN["summary_lower_route"],
+            "status": "MODELLED",
+            "status_message_id": "summary_status_modelled",
+            "status_message_params": {},
+        }
+    return response
 
 
 def search_places(query: str, config: AppConfig | None = None, limit: int = 10) -> list[dict[str, Any]]:

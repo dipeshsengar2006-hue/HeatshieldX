@@ -7,16 +7,17 @@ import math
 from datetime import datetime
 
 from fastapi import APIRouter, HTTPException, Query, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
 
 from app.config import get_config
-from app.i18n import CITIZEN_EN, validate_citizen_i18n
+from app.i18n import CITIZEN_EN, CITIZEN_HI, validate_citizen_i18n
 from app.repositories.cache import cache_status, load_cached_geojson, load_exposure_snapshot, load_risk_snapshot, load_shadow_snapshot
 from app.services.explainability_engine import build_risk_drivers, deduplicate_risk_features, find_canonical_feature, rank_hottest_and_highest_risk, street_summary
 from app.services.intervention_engine import get_plan, list_candidates, optimize_resources
 from app.services.risk_engine import normalize_with_bounds, risk_class
+from app.services.public_summary import PublicSummaryError, public_summary as build_public_summary
 from app.services.routing_engine import RoutingError, route_request, search_places
 
 
@@ -39,6 +40,12 @@ class RouteRequest(BaseModel):
     origin: RouteCoordinate
     destination: RouteCoordinate
     time: str
+
+
+class PublicSummaryRequest(BaseModel):
+    lat: float = Field(ge=-90, le=90, allow_inf_nan=False)
+    lon: float = Field(ge=-180, le=180, allow_inf_nan=False)
+    time: str = Field(min_length=5, max_length=5)
 
 
 def _load_or_503(name: str) -> dict:
@@ -137,8 +144,10 @@ def citizen(request: Request) -> HTMLResponse:
             "data_download_date": _data_download_date(),
             "computation_mode": config.computation_mode,
             "strings": CITIZEN_EN,
+            "hindi_strings": CITIZEN_HI,
             "demo_pairs": demo_pairs,
             "stop_summary": stop_summary,
+            "min_heat_reduction_pct": config.min_heat_reduction_pct,
         },
     )
 
@@ -163,8 +172,11 @@ def places(q: str = Query(..., min_length=1, max_length=100)) -> dict:
     """Search only named streets, buildings, and amenities in the local cache."""
     try:
         return {"query": q, "places": search_places(q)}
-    except FileNotFoundError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except FileNotFoundError:
+        return JSONResponse(
+            status_code=503,
+            content={"detail": CITIZEN_EN["places_error"], "message_id": "places_error", "message_params": {}},
+        )
 
 
 @router.post("/api/routes")
@@ -177,7 +189,32 @@ def routes(payload: RouteRequest) -> dict:
             payload.time,
         )
     except (RoutingError, FileNotFoundError) as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+        detail = str(exc)
+        lowered = detail.casefold()
+        if "outside" in lowered or "from the cached walking network" in lowered:
+            message_id = "route_error_area"
+        elif "no walking path" in lowered:
+            message_id = "route_error_path"
+        else:
+            message_id = "route_error_generic"
+        return JSONResponse(status_code=422, content={"detail": detail, "message_id": message_id, "message_params": {}})
+
+
+@router.post("/api/public/summary")
+def public_summary(payload: PublicSummaryRequest):
+    """Return a transient, cache-only public summary for one snapped street."""
+    try:
+        return build_public_summary(payload.lat, payload.lon, payload.time)
+    except PublicSummaryError as exc:
+        return JSONResponse(
+            status_code=422,
+            content={"detail": exc.english_text, "message_id": exc.message_id, "message_params": exc.message_params},
+        )
+    except FileNotFoundError as exc:
+        return JSONResponse(
+            status_code=503,
+            content={"detail": str(exc), "message_id": "summary_error", "message_params": {}},
+        )
 
 
 @router.get("/api/status")
