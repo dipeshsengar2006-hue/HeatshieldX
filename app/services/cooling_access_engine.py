@@ -102,8 +102,9 @@ def build_cooling_access_records(config: AppConfig | None = None) -> tuple[dict[
     active_config = config or get_config()
     streets = project_to_metric_crs(gpd.read_file(active_config.cache_data_dir / "streets.geojson"))
     facilities = gpd.read_file(active_config.cache_data_dir / "facilities.geojson").to_crs(streets.crs)
-    water = facilities[facilities.get("facility_type").eq("water")].copy()
-    cooling = facilities[facilities.get("facility_type").eq("cooling")].copy()
+    facility_types = facilities["facility_type"] if "facility_type" in facilities.columns else None
+    water = facilities[facility_types.eq("water")].copy() if facility_types is not None else facilities.iloc[0:0].copy()
+    cooling = facilities[facility_types.eq("cooling")].copy() if facility_types is not None else facilities.iloc[0:0].copy()
 
     water_distances = _walking_distances_to_facilities(streets, water)
     cooling_distances = _walking_distances_to_facilities(streets, cooling)
@@ -133,7 +134,7 @@ def build_cooling_access_records(config: AppConfig | None = None) -> tuple[dict[
     return records, {
         "water_facility_count": len(water),
         "cooling_facility_count": len(cooling),
-        "healthcare_facility_count": int(facilities.get("facility_type").eq("healthcare").sum()),
+        "healthcare_facility_count": int(facility_types.eq("healthcare").sum()) if facility_types is not None else 0,
         "walking_distance_factor": active_config.walking_distance_factor,
         "walking_distance_label": active_config.walking_distance_label,
     }

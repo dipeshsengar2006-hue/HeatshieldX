@@ -5,9 +5,10 @@ from __future__ import annotations
 import json
 import logging
 import time
-from datetime import UTC, datetime
+from datetime import datetime, time as datetime_time
 from pathlib import Path
 from typing import Any, Callable
+from zoneinfo import ZoneInfo
 
 from app.config import AppConfig, get_config
 from app.repositories.cache import load_cached_geojson, load_shadow_snapshot
@@ -17,6 +18,15 @@ from app.services.shadow_engine import time_slug
 LOGGER = logging.getLogger(__name__)
 
 GeoJsonLoader = Callable[..., dict[str, Any]]
+
+
+def _snapshot_timestamp(config: AppConfig, canonical_time: str) -> str:
+    """Use the configured representative instant, rather than wall-clock time."""
+    return datetime.combine(
+        config.representative_heatwave_date,
+        datetime_time.fromisoformat(canonical_time),
+        tzinfo=ZoneInfo(config.representative_timezone),
+    ).isoformat()
 
 
 def temperature_factor(config: AppConfig, canonical_time: str) -> float:
@@ -95,7 +105,7 @@ def _exposure_feature(
         ),
         "observed_or_estimated": "ESTIMATED",
         "modelled_or_interpolated": "MODELLED",
-        "timestamp": datetime.now(UTC).isoformat(),
+        "timestamp": _snapshot_timestamp(config, canonical_time),
         "assumptions_version": config.version,
         "computation_mode": mode,
     }

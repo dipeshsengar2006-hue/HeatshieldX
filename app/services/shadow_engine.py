@@ -7,7 +7,7 @@ import logging
 import math
 import time
 from dataclasses import asdict, dataclass
-from datetime import UTC, datetime, time as clock_time
+from datetime import datetime, time as clock_time
 from pathlib import Path
 from typing import Any, Iterator
 from zoneinfo import ZoneInfo
@@ -161,7 +161,7 @@ def build_shadow_polygons(
     """Create building shadows in a projected metric CRS without failing on bad input."""
     stats = GeometryStats()
     records: list[dict[str, Any]] = []
-    computed_at = datetime.now(UTC).isoformat()
+    computed_at = solar.timestamp
     for _, row in buildings.iterrows():
         footprint = _repair_geometry(row.geometry, "buildings", stats)
         if footprint is None:
@@ -219,7 +219,7 @@ def calculate_shade_fractions(
     shadow_geometries = list(shadows.geometry)
     tree = STRtree(shadow_geometries) if shadow_geometries else None
     records: list[dict[str, Any]] = []
-    computed_at = datetime.now(UTC).isoformat()
+    computed_at = solar.timestamp
     for _, row in streets.iterrows():
         street = _repair_geometry(row.geometry, "streets", stats)
         if street is None or street.length <= 0:

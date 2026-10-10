@@ -14,6 +14,7 @@ from shapely.geometry import Point, shape
 
 from app.config import AppConfig, get_config
 from app.repositories.cache import load_cached_geojson, load_cached_plan, load_risk_snapshot, store_cached_plan
+from app.presentation import display_osm_name
 from app.services.cooling_access_engine import (
     WalkingNetwork,
     bounded_distance_penalty,
@@ -76,7 +77,7 @@ def _street_name_map() -> dict[str, str | None]:
             name = value.get("name")
         except (TypeError, json.JSONDecodeError):
             name = None
-        names[properties["segment_id"]] = name.strip() if isinstance(name, str) and name.strip() else None
+        names[properties["segment_id"]] = display_osm_name(name)
     return names
 
 

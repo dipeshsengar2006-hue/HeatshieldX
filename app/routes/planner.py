@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field
 
 from app.config import get_config
 from app.i18n import CITIZEN_EN, CITIZEN_HI, validate_citizen_i18n
+from app.presentation import display_osm_name
 from app.repositories.cache import cache_status, load_cached_geojson, load_exposure_snapshot, load_risk_snapshot, load_shadow_snapshot
 from app.services.explainability_engine import build_risk_drivers, deduplicate_risk_features, explain_segment_snapshot, find_canonical_feature, rank_hottest_and_highest_risk, street_summary
 from app.services.intervention_engine import get_plan, list_candidates, optimize_resources
@@ -55,6 +56,17 @@ def _load_or_503(name: str) -> dict:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
+def _display_geojson_names(collection: dict) -> dict:
+    """Format OSM labels in an API response without changing cached source data."""
+    features = []
+    for feature in collection.get("features", []):
+        properties = dict(feature.get("properties", {}))
+        if "name" in properties:
+            properties["name"] = display_osm_name(properties["name"])
+        features.append({**feature, "properties": properties})
+    return {**collection, "features": features}
+
+
 def _data_download_date() -> str:
     """Return the date of the preloaded OSM snapshot when it is available."""
     try:
@@ -79,7 +91,7 @@ def _street_name(directed_segment_ids: list[str]) -> str | None:
         except (TypeError, json.JSONDecodeError):
             continue
         if isinstance(name, str) and name.strip():
-            return name.strip()
+            return display_osm_name(name)
         if isinstance(name, float) and math.isnan(name):
             continue
     return None
@@ -166,7 +178,7 @@ def buildings() -> dict:
 
 @router.get("/api/facilities")
 def facilities() -> dict:
-    return _load_or_503("facilities")
+    return _display_geojson_names(_load_or_503("facilities"))
 
 
 @router.get("/api/places")

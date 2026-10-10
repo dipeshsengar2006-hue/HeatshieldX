@@ -1,6 +1,7 @@
 .env
 __pycache__/
 .pytest_cache/
+.pytest-tmp/
 *.py[cod]
 /data/raw/
 /cache/

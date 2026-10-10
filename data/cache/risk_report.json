@@ -30,7 +30,7 @@
         "HIGH": 0,
         "CRITICAL": 0
       },
-      "duration_seconds": 0.029463899787515402
+      "duration_seconds": 0.02906309999525547
     },
     "11:00": {
       "segment_count": 940,
@@ -43,7 +43,7 @@
         "HIGH": 24,
         "CRITICAL": 0
       },
-      "duration_seconds": 0.030140700051560998
+      "duration_seconds": 0.026573500130325556
     },
     "13:00": {
       "segment_count": 940,
@@ -56,7 +56,7 @@
         "HIGH": 94,
         "CRITICAL": 6
       },
-      "duration_seconds": 0.0252470001578331
+      "duration_seconds": 0.027739099925383925
     },
     "15:00": {
       "segment_count": 940,
@@ -69,7 +69,7 @@
         "HIGH": 62,
         "CRITICAL": 6
       },
-      "duration_seconds": 0.026109999977052212
+      "duration_seconds": 0.027326799929142
     },
     "17:00": {
       "segment_count": 940,
@@ -82,7 +82,7 @@
         "HIGH": 4,
         "CRITICAL": 0
       },
-      "duration_seconds": 0.027137700002640486
+      "duration_seconds": 0.02972720004618168
     }
   },
   "vulnerability_stats": {
@@ -90,5 +90,5 @@
     "mean": 0.32197886329201963,
     "max": 1.0
   },
-  "duration_seconds": 14.827257700031623
+  "duration_seconds": 15.173324899980798
 }

@@ -42,7 +42,8 @@ def repair_and_filter_geometries(
     """Repair invalid geometries where possible, logging each discarded record class."""
     if gdf.empty:
         return gdf.copy()
-    cleaned = gdf[gdf.geometry.notna()].copy()
+    valid_input = ~gdf.geometry.isna() & ~gdf.geometry.is_empty
+    cleaned = gdf[valid_input].copy()
     missing_count = len(gdf) - len(cleaned)
     invalid = ~cleaned.geometry.is_valid
     invalid_count = int(invalid.sum())
@@ -64,7 +65,7 @@ def repair_and_filter_geometries(
 def _number(value: Any) -> float | None:
     if value is None or isinstance(value, bool):
         return None
-    match = re.search(r"[-+]?\\d*\\.?\\d+", str(value))
+    match = re.search(r"[-+]?\d*\.?\d+", str(value))
     if not match:
         return None
     parsed = float(match.group())

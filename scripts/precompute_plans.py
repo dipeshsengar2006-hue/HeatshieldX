@@ -7,6 +7,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from app.config import get_config
+from app.repositories.cache import store_cached_plan
 from app.services.intervention_engine import optimize_resources
 
 
@@ -19,8 +21,10 @@ PRESETS = (
 
 
 def main() -> None:
+    config = get_config()
     for resources in PRESETS:
-        plan = optimize_resources(resources)
+        plan = optimize_resources(resources, config)
+        store_cached_plan(plan["plan_id"], plan, config)
         print(f"{plan['plan_id']}: {plan['runtime_seconds']:.3f}s")
 
 

@@ -11,6 +11,7 @@ from shapely.geometry import LineString, Point, shape
 
 from app.config import AppConfig
 from app.i18n import CITIZEN_EN
+from app.presentation import display_osm_name
 from app.repositories.cache import load_cached_geojson
 
 if TYPE_CHECKING:
@@ -61,7 +62,7 @@ def find_safe_stops(graph: RouteGraph, path: PathResult, config: AppConfig) -> d
         network_distance = min(route_distances)
         stop_type = str(properties["stop_type"])
         name = properties.get("name")
-        display_name = name.strip() if isinstance(name, str) and name.strip() else f"Unnamed {stop_type}"
+        display_name = display_osm_name(name) or f"Unnamed {stop_type}"
         relevance = max(0.0, min(1.0, 1 - route_distance / config.stop_max_route_distance_m))
         candidates.append({
             "stop_id": str(properties["stop_id"]),

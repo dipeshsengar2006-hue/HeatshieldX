@@ -20,6 +20,7 @@ from shapely.ops import nearest_points
 
 from app.config import AppConfig, get_config
 from app.i18n import CITIZEN_EN
+from app.presentation import display_osm_name
 from app.repositories.cache import load_cached_geojson, load_risk_snapshot
 from app.services.data_engine import project_to_metric_crs
 from app.services.stop_finder import find_safe_stops
@@ -634,7 +635,7 @@ def ranked_place_matches(
         record = {
             "place_type": place_type,
             "place_id": place_id,
-            "name": name.strip(),
+            "name": display_osm_name(name),
             "location": {"type": "Point", "coordinates": [point.x, point.y]},
         }
         matched.append((record, score))
@@ -703,12 +704,12 @@ def nearest_named_place(
             name = json.loads(properties.get("road_metadata", "{}") or "{}").get("name")
         except (TypeError, json.JSONDecodeError):
             name = None
-        consider(name, feature.get("geometry"))
+        consider(display_osm_name(name), feature.get("geometry"))
     for source_name in ("buildings", "facilities"):
         try:
             features = load_cached_geojson(source_name, active_config).get("features", [])
         except FileNotFoundError:
             features = []
         for feature in features:
-            consider(feature.get("properties", {}).get("name"), feature.get("geometry"))
+            consider(display_osm_name(feature.get("properties", {}).get("name")), feature.get("geometry"))
     return best
