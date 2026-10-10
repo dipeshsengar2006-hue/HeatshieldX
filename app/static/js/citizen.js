@@ -11,6 +11,13 @@
   const map = L.map("citizen-map", { scrollWheelZoom: false }).setView(
     [Number(body.dataset.lat), Number(body.dataset.lon)], 16
   );
+  let mapResizeFrame;
+  const invalidateMapSize = () => {
+    window.cancelAnimationFrame(mapResizeFrame);
+    mapResizeFrame = window.requestAnimationFrame(() => map.invalidateSize({ pan: false }));
+  };
+  window.addEventListener("resize", invalidateMapSize);
+  if ("ResizeObserver" in window) new ResizeObserver(invalidateMapSize).observe(document.getElementById("citizen-map"));
   const tileNotice = document.getElementById("tile-notice");
   const tileLayer = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
     maxZoom: 19,
@@ -143,6 +150,19 @@
     return node;
   }
 
+  function svgIcon(name) {
+    const paths = {
+      fastest: ["M5 12h14", "m12 6 6 6-6 6"], heat: ["M12 3v2M12 19v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M3 12h2M19 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4", "M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8"],
+      balanced: ["M4 6h16", "M8 6v12M16 6v12", "M5 18h6M13 18h6"], time: ["M12 7v5l3 2", "M20 12a8 8 0 1 1-16 0 8 8 0 0 1 16 0"],
+      distance: ["M4 18 18 4", "M5 14v4h4M15 6h4v4"], heatMetric: ["M12 3v2M12 19v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4", "M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8"],
+      change: ["M5 17 10 12l3 3 6-7", "M15 8h4v4"], shade: ["M4 13a8 8 0 0 1 16 0", "M4 13h16"], cooling: ["M12 3v18M4.2 7.5l15.6 9M4.2 16.5l15.6-9"],
+    };
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("viewBox", "0 0 24 24"); svg.setAttribute("aria-hidden", "true");
+    (paths[name] || paths.fastest).forEach((d) => { const path = document.createElementNS("http://www.w3.org/2000/svg", "path"); path.setAttribute("d", d); svg.append(path); });
+    return svg;
+  }
+
   function format(value, key) {
     return message(key, { value });
   }
@@ -265,6 +285,7 @@
     stops.items.forEach((stop) => {
       const item = textNode("article", "", "stop-item");
       const heading = textNode("h3", stop.name || message("stop_type_other"));
+      heading.title = stop.name || message("stop_type_other");
       const typeId = stop.stop_type_message_id || `stop_type_${stop.stop_type}`;
       const typeName = message(typeId, stop.stop_type_message_params || {}, stop.stop_type || copy.stop_type_other);
       heading.append(document.createTextNode(` · ${typeName}`));
@@ -321,8 +342,13 @@
     card.type = "button";
     card.dataset.route = route.route_type;
     card.setAttribute("aria-pressed", "false");
+    const heading = textNode("div", "", "route-card-heading");
+    const iconName = ({ FASTEST: "fastest", HEAT_AWARE: "heat", BALANCED: "balanced" })[route.route_type] || "fastest";
+    const icon = textNode("span", "", "route-card-icon"); icon.append(svgIcon(iconName));
     const title = textNode("h3", message(route.route_type_message_id, route.route_type_message_params || {}, routeLabel(route.route_type)));
-    card.append(title);
+    heading.append(icon, title);
+    if (payloadRecommendsRoute(route)) heading.append(textNode("span", message("recommended"), "recommended-badge"));
+    card.append(heading);
     const sameLabels = Array.isArray(route.same_as_messages) ? route.same_as_messages : [];
     if (sameLabels.length > 0) {
       sameLabels.forEach((same) => card.append(textNode("span", message(same.message_id, same.message_params || {}, same.text || copy.same_route_fastest), "route-subtitle")));
@@ -331,17 +357,18 @@
     const metrics = document.createElement("dl");
     metrics.className = "route-metrics";
     const pairs = [
-      [message("time"), format(Math.round(route.total_time_s / 60), "extra_minutes_value")],
-      [message("distance"), format(Math.round(route.total_distance_m), "stop_distance_value")],
-      [message("modelled_heat"), Number(route.modelled_heat_exposure).toFixed(1)],
-      [message("heat_change"), `${Number(route.classification_vs_fastest.modelled_heat_exposure_change_percent).toFixed(1)}%`],
-      [message("extra_minutes"), format(Math.max(0, Math.round(route.classification_vs_fastest.extra_minutes)), "extra_minutes_value")],
-      [message("weighted_shade"), `${(Number(route.weighted_shade) * 100).toFixed(0)}%`],
-      [message(route.cooling_access_message_id || "cooling_access"), typeof route.cooling_access === "number" ? Number(route.cooling_access).toFixed(2) : message(route.cooling_access_message_id || "cooling_unavailable", route.cooling_access_message_params || {}, route.cooling_access)],
+      [message("time"), format(Number(route.total_time_s / 60).toFixed(1), "extra_minutes_value"), "time"],
+      [message("distance"), format(Math.round(route.total_distance_m), "stop_distance_value"), "distance"],
+      [message("modelled_heat"), Number(route.modelled_heat_exposure).toFixed(1), "heatMetric"],
+      [message("heat_change"), `${Number(route.classification_vs_fastest.modelled_heat_exposure_change_percent).toFixed(1)}%`, "change"],
+      [message("extra_minutes"), format(Math.max(0, Number(route.classification_vs_fastest.extra_minutes)).toFixed(1), "extra_minutes_value"), "time"],
+      [message("weighted_shade"), `${(Number(route.weighted_shade) * 100).toFixed(1)}%`, "shade"],
+      [message(route.cooling_access_message_id || "cooling_access"), typeof route.cooling_access === "number" ? Number(route.cooling_access).toFixed(2) : message(route.cooling_access_message_id || "cooling_unavailable", route.cooling_access_message_params || {}, route.cooling_access), "cooling"],
     ];
-    pairs.forEach(([label, value]) => {
+    pairs.forEach(([label, value, iconName]) => {
       const wrapper = document.createElement("div");
-      wrapper.append(textNode("dt", label), textNode("dd", value));
+      const metricLabel = textNode("dt", "", "metric-label"); metricLabel.append(svgIcon(iconName), document.createTextNode(label));
+      wrapper.append(metricLabel, textNode("dd", value));
       metrics.append(wrapper);
     });
     card.append(metrics);
@@ -349,8 +376,24 @@
     return card;
   }
 
+  function payloadRecommendsRoute(route) {
+    return lastRoutePayload?.recommendation_message_id === "recommendation_heat" && route.route_type === "HEAT_AWARE";
+  }
+
+  function renderRouteSkeletons() {
+    routeCards.replaceChildren();
+    routeCards.setAttribute("aria-busy", "true");
+    for (let index = 0; index < 3; index += 1) {
+      const skeleton = document.createElement("div");
+      skeleton.className = "route-card-skeleton";
+      skeleton.setAttribute("aria-hidden", "true");
+      routeCards.append(skeleton);
+    }
+  }
+
   function renderRoutes(payload) {
     clearRouteDisplay();
+    routeCards.removeAttribute("aria-busy");
     currentRoutes = payload.routes || [];
     if (!currentRoutes.length) {
       routeCards.append(textNode("p", message("empty_routes"), "empty-state"));
@@ -400,6 +443,7 @@
     lastRoutePayload = null;
     renderSummaryRouteNote(null);
     clearRouteDisplay();
+    renderRouteSkeletons();
     try {
       const response = await fetch(body.dataset.routeApi, {
         method: "POST",
@@ -417,6 +461,8 @@
       setStatus(message("status_route_ready"));
     } catch (error) {
       setStatus(error.message || message("route_error_generic"), true);
+      routeCards.removeAttribute("aria-busy");
+      routeCards.replaceChildren(textNode("p", message("empty_routes"), "empty-state"));
     } finally {
       findButton.disabled = false;
       findButton.textContent = message("find_routes");

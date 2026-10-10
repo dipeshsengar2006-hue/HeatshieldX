@@ -13,14 +13,13 @@
     <header class="site-header citizen-header">
       <a class="brand" href="/" aria-label="{{ strings.brand_name }}" data-i18n="brand_name" data-i18n-aria-label="brand_name">{{ strings.brand_name }}</a>
       <p data-i18n="header_context">{{ strings.header_context }}</p>
-      <nav class="mode-switch" aria-label="{{ strings.nav_label }}">
-        <a href="/" aria-current="false" data-i18n="planner_page">{{ strings.planner_page }}</a>
-        <a href="/citizen" aria-current="page" data-i18n="citizen_page">{{ strings.citizen_page }}</a>
+      <nav class="mode-switch" role="tablist" aria-label="{{ strings.nav_label }}" data-i18n-aria-label="nav_label">
+        <a href="/" role="tab" aria-current="false" aria-selected="false" class="mode-option"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 20V10l8-6 8 6v10M9 20v-5h6v5M3 20h18"/></svg><span data-i18n="planner_page">{{ strings.planner_page }}</span><small data-i18n="nav_caption_authorities">{{ strings.nav_caption_authorities }}</small></a>
+        <a href="/citizen" role="tab" aria-current="page" aria-selected="true" class="mode-option"><svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="8" r="3"/><path d="M5 21c.7-4 3.1-6 7-6s6.3 2 7 6M3 12h3M18 12h3"/></svg><span data-i18n="citizen_page">{{ strings.citizen_page }}</span><small data-i18n="nav_caption_citizens">{{ strings.nav_caption_citizens }}</small></a>
       </nav>
       <div class="language-switch" role="group" aria-label="{{ strings.language_label }}" data-i18n-aria-label="language_label">
-        <button id="language-en" type="button" data-language="en" aria-pressed="true" data-i18n="language_english">{{ strings.language_english }}</button>
-        <span aria-hidden="true">|</span>
-        <button id="language-hi" type="button" data-language="hi" aria-pressed="false" data-i18n="language_hindi">{{ strings.language_hindi }}</button>
+        <button id="language-en" type="button" data-language="en" aria-label="{{ strings.language_english }}" data-i18n-aria-label="language_english" aria-pressed="true" data-i18n="language_short_english">{{ strings.language_short_english }}</button>
+        <button id="language-hi" type="button" data-language="hi" aria-label="{{ strings.language_hindi }}" data-i18n-aria-label="language_hindi" aria-pressed="false" data-i18n="language_short_hindi">{{ strings.language_short_hindi }}</button>
       </div>
     </header>
 
@@ -33,7 +32,15 @@
         <span class="mode-badge" data-mode="{{ computation_mode|lower }}" data-i18n="{{ mode_id }}">{{ strings[mode_id] }}</span>
       </section>
 
+      <ol class="journey-steps" aria-label="{{ strings.flow_label }}" data-i18n-aria-label="flow_label">
+        <li><span>1</span><strong data-i18n="flow_where">{{ strings.flow_where }}</strong></li>
+        <li><span>2</span><strong data-i18n="flow_when">{{ strings.flow_when }}</strong></li>
+        <li><span>3</span><strong data-i18n="flow_compare">{{ strings.flow_compare }}</strong></li>
+        <li><span>4</span><strong data-i18n="flow_stops">{{ strings.flow_stops }}</strong></li>
+      </ol>
+
       <section id="summary-card" class="summary-card" aria-labelledby="summary-title" aria-live="polite">
+        <p class="eyebrow" data-i18n="summary_eyebrow">{{ strings.summary_eyebrow }}</p>
         <h2 id="summary-title" data-i18n="summary_title">{{ strings.summary_title }}</h2>
         <p id="summary-peak" class="summary-peak" data-i18n="summary_loading">{{ strings.summary_loading }}</p>
         <small id="summary-peak-status" class="summary-status"></small>

@@ -21,7 +21,7 @@ def test_both_pages_include_the_copilot_button_and_accessible_panel():
         assert response.status_code == 200
         for expected in (
             'id="copilot-open"', 'id="copilot-panel"', 'id="copilot-conversation"',
-            'aria-modal="true"', 'aria-live="polite"', 'id="copilot-clear"',
+            'aria-modal="false"', 'aria-live="polite"', 'id="copilot-clear"',
         ):
             assert expected in response.text
 
@@ -33,6 +33,43 @@ def test_copilot_catalog_has_parity_safe_word_choice_and_required_examples():
     assert "Mujhe route mein heat se bachne ke liye kya karna chahiye?" == CITIZEN_EN["copilot_example_heat"]
     new_copy = " ".join(CITIZEN_EN[key] for key in copilot_ids).casefold()
     assert not any(term in new_copy for term in ("heatstroke", "prevent", "safe route"))
+
+
+def test_agni_ui_copy_and_panel_state_contracts_are_present():
+    template = (ROOT / "app" / "templates" / "_copilot_panel.html").read_text(encoding="utf-8")
+    javascript = (ROOT / "app" / "static" / "js" / "copilot.js").read_text(encoding="utf-8")
+
+    stylesheet = (ROOT / "app" / "static" / "css" / "base.css").read_text(encoding="utf-8")
+    assert 'aria-hidden="true" hidden inert' in template
+    assert 'data-copilot-i18n="copilot_subtitle"' in template
+    assert 'data-copilot-i18n-aria-label="copilot_open"' in template
+    assert "agni-wave-ring" in template
+    assert "[hidden] { display: none !important; }" in stylesheet
+    assert ".copilot-panel.is-open" in stylesheet
+    assert "pointer-events: none" in stylesheet
+    assert "@media (prefers-reduced-motion: reduce)" in stylesheet
+    for catalog in (CITIZEN_EN, CITIZEN_HI):
+        assert "copilot" not in catalog["copilot_button"].casefold()
+        assert "copilot" not in catalog["copilot_panel_title"].casefold()
+        assert "copilot" not in catalog["copilot_close"].casefold()
+        assert "copilot" not in catalog["copilot_input_label"].casefold()
+        assert "copilot" not in catalog["copilot_footer"].casefold()
+        assert "copilot_empty_greeting" in catalog
+    assert any("\u0900" <= char <= "\u097f" for char in CITIZEN_HI["copilot_subtitle"])
+    assert any("\u0900" <= char <= "\u097f" for char in CITIZEN_HI["copilot_open"])
+    for expected in (
+        "root.dataset.copilotInitialized",
+        "const setOpen",
+        'panel.setAttribute("aria-hidden", String(!nextOpen))',
+        'openButton.setAttribute("aria-expanded", String(nextOpen))',
+        "activeElement !== document.body",
+        "window.matchMedia(\"(max-width: 760px)\")",
+        'event.key === "Escape"',
+    ):
+        assert expected in javascript
+    assert javascript.count("const setOpen") == 1
+    set_open_body = javascript.split("const setOpen", 1)[1].split("const closePanel", 1)[0]
+    assert set_open_body.count("panel.hidden") == 2
 
 
 def test_copilot_accepts_the_ui_context_shape_and_returns_rendering_fields():

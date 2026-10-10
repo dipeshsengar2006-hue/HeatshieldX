@@ -1,12 +1,20 @@
 <div id="copilot-root" class="copilot-root">
-  <button id="copilot-open" class="copilot-fab" type="button" aria-controls="copilot-panel" aria-expanded="false"><span aria-hidden="true">✦</span> <span data-copilot-i18n="copilot_button">Copilot</span></button>
-  <div id="copilot-backdrop" class="copilot-backdrop" hidden></div>
-  <aside id="copilot-panel" class="copilot-panel" role="dialog" aria-modal="true" aria-labelledby="copilot-title" hidden tabindex="-1">
-    <header class="copilot-panel-header"><div><h2 id="copilot-title" data-copilot-i18n="copilot_panel_title">HeatShield Copilot</h2><p id="copilot-context" class="copilot-context"></p></div><button id="copilot-close" class="copilot-icon-button" type="button" data-copilot-i18n-aria-label="copilot_close" aria-label="Close Copilot">×</button></header>
+  <button id="copilot-open" class="copilot-fab" type="button" aria-controls="copilot-panel" aria-expanded="false" data-copilot-i18n-aria-label="copilot_open" aria-label="Open Agni assistant">
+    <svg class="agni-launcher-icon" viewBox="0 0 56 56" aria-hidden="true" focusable="false">
+      <circle class="agni-wave-ring agni-wave-ring-one" cx="28" cy="28" r="12"></circle>
+      <circle class="agni-wave-ring agni-wave-ring-two" cx="28" cy="28" r="12"></circle>
+      <circle class="agni-wave-ring agni-wave-ring-three" cx="28" cy="28" r="12"></circle>
+      <path class="agni-flame" d="M29.1 12.5c2.8 5.8 8.5 8.7 8.5 15.6A9.6 9.6 0 1 1 19 28.1c0-4.4 2.3-8 6.2-11.1-.2 4.3 1.4 6.8 4.2 8.2.7-4.4.7-8.3-.3-12.7Zm-1.3 17.1c-1.6 1.5-2.6 3-2.6 4.8a3.5 3.5 0 0 0 7 0c0-2.1-1.5-3.5-4.4-4.8Z"></path>
+    </svg>
+    <span class="copilot-fab-label" data-copilot-i18n="copilot_button">Agni</span>
+  </button>
+  <div id="copilot-backdrop" class="copilot-backdrop" hidden aria-hidden="true"></div>
+  <aside id="copilot-panel" class="copilot-panel is-closed" role="dialog" aria-modal="false" aria-labelledby="copilot-title" aria-hidden="true" hidden inert tabindex="-1">
+    <header class="copilot-panel-header"><div><h2 id="copilot-title" data-copilot-i18n="copilot_panel_title">Agni</h2><p class="copilot-subtitle" data-copilot-i18n="copilot_subtitle">HeatShield assistant</p><p id="copilot-context" class="copilot-context"></p></div><button id="copilot-close" class="copilot-icon-button" type="button" data-copilot-i18n-aria-label="copilot_close" aria-label="Close Agni">×</button></header>
     <section class="copilot-examples" aria-labelledby="copilot-examples-title"><h3 id="copilot-examples-title" data-copilot-i18n="copilot_examples">Example questions</h3><div id="copilot-example-list" class="copilot-chip-list"></div></section>
-    <ol id="copilot-conversation" class="copilot-conversation" aria-label="Copilot conversation" data-copilot-i18n-aria-label="copilot_conversation" aria-live="polite"></ol>
+    <ol id="copilot-conversation" class="copilot-conversation" aria-label="Agni conversation" data-copilot-i18n-aria-label="copilot_conversation" aria-live="polite"></ol>
     <p id="copilot-error" class="copilot-error" role="alert" hidden></p><button id="copilot-retry" class="secondary-button copilot-retry" type="button" hidden data-copilot-i18n="copilot_retry">Retry</button>
-    <form id="copilot-form" class="copilot-form" novalidate><label for="copilot-input" data-copilot-i18n="copilot_input_label">Ask Copilot</label><textarea id="copilot-input" maxlength="500" rows="3" data-copilot-i18n-placeholder="copilot_input_placeholder" placeholder="Ask about the current model results"></textarea><div class="copilot-form-actions"><output id="copilot-counter">0/500</output><button id="copilot-send" class="primary-button" type="submit" data-copilot-i18n="copilot_send">Send</button></div><button id="copilot-clear" class="copilot-clear" type="button" data-copilot-i18n="copilot_clear">Clear conversation</button></form>
-    <footer class="copilot-footer" data-copilot-i18n="copilot_footer">Copilot explains model results; it does not diagnose or give medical advice.</footer>
+    <form id="copilot-form" class="copilot-form" novalidate><label for="copilot-input" data-copilot-i18n="copilot_input_label">Ask Agni</label><textarea id="copilot-input" maxlength="500" rows="3" data-copilot-i18n-placeholder="copilot_input_placeholder" placeholder="Ask about the current model results"></textarea><div class="copilot-form-actions"><output id="copilot-counter">0/500</output><button id="copilot-send" class="primary-button" type="submit" data-copilot-i18n="copilot_send">Send</button></div><button id="copilot-clear" class="copilot-clear" type="button" data-copilot-i18n="copilot_clear">Clear conversation</button></form>
+    <footer class="copilot-footer" data-copilot-i18n="copilot_footer">Agni explains model results; it does not diagnose or give medical advice.</footer>
   </aside>
 </div>

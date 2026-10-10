@@ -5,6 +5,13 @@
   const lat = Number(document.body.dataset.lat);
   const lon = Number(document.body.dataset.lon);
   const map = L.map(mapElement, { zoomControl: true }).setView([lat, lon], 15);
+  let mapResizeFrame;
+  const invalidateMapSize = () => {
+    window.cancelAnimationFrame(mapResizeFrame);
+    mapResizeFrame = window.requestAnimationFrame(() => map.invalidateSize({ pan: false }));
+  };
+  window.addEventListener("resize", invalidateMapSize);
+  if ("ResizeObserver" in window) new ResizeObserver(invalidateMapSize).observe(mapElement);
   const slider = document.querySelector("#exposure-slider");
   const timeOutput = document.querySelector("#exposure-time");
   const statusLabel = document.querySelector("#exposure-status-label");
@@ -59,9 +66,10 @@
     parent.append(element);
     return element;
   };
-  const metric = (parent, label, value) => {
+  const metric = (parent, label, value, definition) => {
     const item = append(parent, "div", undefined, "metric");
-    append(item, "dt", label);
+    const heading = append(item, "dt", label);
+    if (definition) { heading.title = definition; heading.setAttribute("aria-label", `${label}: ${definition}`); }
     append(item, "dd", value);
   };
 
@@ -125,14 +133,15 @@
     const { street } = payload;
     whyPanel.replaceChildren();
     append(whyPanel, "p", "Street explanation", "eyebrow");
-    append(whyPanel, "h2", street.street_name || street.canonical_street_key);
+    const streetHeading = append(whyPanel, "h2", street.street_name || street.canonical_street_key, "street-title");
+    streetHeading.title = street.street_name || street.canonical_street_key;
     append(whyPanel, "p", `Street ID: ${street.canonical_street_key}`);
     const grid = append(whyPanel, "dl", undefined, "metric-grid");
-    metric(grid, "Score / class", `${Number(street.risk_score).toFixed(1)} / ${street.risk_class}`);
-    metric(grid, "Solar exposure", `${street.solar_exposure_level} (${Number(street.exposure_value).toFixed(2)})`);
-    metric(grid, "Shade", `${street.shade_level} (${Number(street.shade_fraction).toFixed(2)})`);
-    metric(grid, "Vulnerability", `${street.vulnerability_level} — estimated, density-based proxy`);
-    metric(grid, "Cooling access", `${street.cooling_access_level} (${Number(street.access_penalty).toFixed(2)})`);
+    metric(grid, "Score / class", `${Number(street.risk_score).toFixed(1)} / ${street.risk_class}`, "A modelled prioritization score from 0 to 100, not a medical threshold.");
+    metric(grid, "Solar exposure", `${street.solar_exposure_level} (${Number(street.exposure_value).toFixed(2)})`, "The modelled share of direct street exposure at the selected time.");
+    metric(grid, "Shade", `${street.shade_level} (${Number(street.shade_fraction).toFixed(2)})`, "The modelled share of the street shaded at the selected time.");
+    metric(grid, "Vulnerability", `${street.vulnerability_level} — estimated, density-based proxy`, "An estimated prioritization input based on the configured vulnerability proxy.");
+    metric(grid, "Cooling access", `${street.cooling_access_level} (${Number(street.access_penalty).toFixed(2)})`, "A modelled access penalty based on recorded cooling and water facilities.");
     if (!street.water_available && !street.cooling_available) {
       append(whyPanel, "p", "No recorded water/cooling facilities in OSM for this area.", "facility-note");
     }

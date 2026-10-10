@@ -4,6 +4,8 @@
   const root = document.getElementById("copilot-root");
   const catalogNode = document.getElementById("copilot-catalogs");
   if (!root || !catalogNode) return;
+  if (root.dataset.copilotInitialized === "true") return;
+  root.dataset.copilotInitialized = "true";
 
   const catalogs = JSON.parse(catalogNode.textContent || "{}");
   const english = catalogs.en || {};
@@ -29,6 +31,8 @@
     lastMessage: "",
     pending: false,
     opener: null,
+    isOpen: false,
+    closeTimer: null,
   };
 
   const message = (id, params = {}) => {
@@ -76,6 +80,10 @@
   };
   const renderConversation = () => {
     conversationNode.replaceChildren();
+    if (!state.conversation.length) {
+      const emptyState = text("li", message("copilot_empty_greeting"), "copilot-empty-state");
+      conversationNode.append(emptyState);
+    }
     state.conversation.forEach((entry) => {
       const item = document.createElement("li");
       item.className = `copilot-message copilot-message-${entry.role}${entry.data_unavailable ? " copilot-message-neutral" : ""}`;
@@ -95,21 +103,24 @@
           entry.sources.forEach((source) => sources.append(text("span", `${source.type}: ${source.label}`, "copilot-source-chip")));
           item.append(sources);
         }
-        const details = document.createElement("details");
-        details.className = "copilot-facts";
-        details.append(text("summary", message("copilot_facts_title")));
         const facts = entry.facts_used && typeof entry.facts_used === "object" ? Object.entries(entry.facts_used) : [];
-        details.append(text("h4", message("copilot_facts")));
-        if (facts.length) {
+        const assumptions = Array.isArray(entry.assumptions) ? entry.assumptions : [];
+        if (facts.length || assumptions.length) {
+          const details = document.createElement("details");
+          details.className = "copilot-facts";
+          details.append(text("summary", message("copilot_facts_title")));
+          details.append(text("h4", message("copilot_facts")));
           const list = document.createElement("dl");
           facts.forEach(([key, value]) => { list.append(text("dt", key), text("dd", typeof value === "string" ? value : JSON.stringify(value))); });
-          details.append(list);
-        } else details.append(text("p", message("copilot_no_facts")));
-        details.append(text("h4", message("copilot_assumptions")));
-        const assumptions = document.createElement("ul");
-        (entry.assumptions || []).forEach((assumption) => assumptions.append(text("li", assumption)));
-        details.append(assumptions);
-        item.append(details);
+          if (facts.length) details.append(list);
+          if (assumptions.length) {
+            details.append(text("h4", message("copilot_assumptions")));
+            const list = document.createElement("ul");
+            assumptions.forEach((assumption) => list.append(text("li", assumption)));
+            details.append(list);
+          }
+          item.append(details);
+        }
       }
       conversationNode.append(item);
     });
@@ -129,8 +140,60 @@
   };
   const setPending = (pending) => { state.pending = pending; sendButton.disabled = pending; input.disabled = pending; };
   const focusable = () => [...panel.querySelectorAll('button:not([disabled]), textarea:not([disabled]), [href], details, [tabindex]:not([tabindex="-1"])')].filter((node) => !node.hidden);
-  const closePanel = () => { panel.hidden = true; backdrop.hidden = true; openButton.setAttribute("aria-expanded", "false"); (state.opener || openButton).focus(); };
-  const openPanel = () => { state.opener = document.activeElement; panel.hidden = false; backdrop.hidden = false; openButton.setAttribute("aria-expanded", "true"); renderChrome(); input.focus(); };
+  const setOpen = (isOpen, { restoreFocus = false, immediate = false } = {}) => {
+    const nextOpen = Boolean(isOpen);
+    window.clearTimeout(state.closeTimer);
+    state.closeTimer = null;
+    state.isOpen = nextOpen;
+    panel.inert = !nextOpen;
+    panel.setAttribute("aria-hidden", String(!nextOpen));
+    backdrop.setAttribute("aria-hidden", String(!nextOpen));
+    openButton.setAttribute("aria-expanded", String(nextOpen));
+    if (nextOpen) {
+      panel.hidden = false;
+      backdrop.hidden = false;
+      window.requestAnimationFrame(() => {
+        if (state.isOpen) {
+          root.classList.add("is-open");
+          panel.classList.add("is-open");
+          panel.classList.remove("is-closed");
+          input.focus();
+        }
+      });
+      return;
+    }
+    root.classList.remove("is-open");
+    panel.classList.remove("is-open");
+    panel.classList.add("is-closed");
+    const hideClosedUi = () => {
+      if (!state.isOpen) {
+        panel.hidden = true;
+        backdrop.hidden = true;
+      }
+    };
+    if (immediate || window.matchMedia("(prefers-reduced-motion: reduce)").matches) hideClosedUi();
+    else state.closeTimer = window.setTimeout(hideClosedUi, 220);
+    if (restoreFocus) {
+      const opener = state.opener;
+      const target = opener instanceof HTMLElement && opener.isConnected ? opener : openButton;
+      target.focus();
+    }
+  };
+  const closePanel = (event) => {
+    event?.preventDefault();
+    event?.stopPropagation();
+    if (!state.isOpen) return;
+    setOpen(false, { restoreFocus: true });
+  };
+  const openPanel = () => {
+    if (state.isOpen) { input.focus(); return; }
+    const activeElement = document.activeElement;
+    state.opener = activeElement instanceof HTMLElement && activeElement !== document.body && !panel.contains(activeElement)
+      ? activeElement
+      : openButton;
+    renderChrome();
+    setOpen(true);
+  };
   async function sendMessage() {
     const value = input.value.trim();
     if (!value || state.pending) return;
@@ -164,9 +227,11 @@
   retryButton.addEventListener("click", () => { input.value = state.lastMessage; updateCounter(); sendMessage(); });
   openButton.addEventListener("click", openPanel);
   closeButton.addEventListener("click", closePanel);
-  backdrop.addEventListener("click", closePanel);
+  backdrop.addEventListener("click", (event) => {
+    if (window.matchMedia("(max-width: 760px)").matches) closePanel(event);
+  });
   document.addEventListener("keydown", (event) => {
-    if (panel.hidden) return;
+    if (!state.isOpen) return;
     if (event.key === "Escape") { event.preventDefault(); closePanel(); return; }
     if (event.key !== "Tab") return;
     const items = focusable(); if (!items.length) return;
@@ -180,8 +245,13 @@
   function setLanguage(language) {
     state.language = language === "hi" ? "hi" : "en";
     document.documentElement.lang = state.language;
+    setOpen(false, { immediate: true });
     renderChrome();
   }
+  window.addEventListener("resize", () => { if (state.isOpen) setOpen(false); });
+  window.addEventListener("pagehide", () => setOpen(false, { immediate: true }));
+  document.addEventListener("visibilitychange", () => root.classList.toggle("is-tab-hidden", document.hidden));
+  setOpen(false, { immediate: true });
   window.heatshieldCopilot = {
     setContext: (context) => { state.context = { ...state.context, ...context }; contextNode.textContent = contextLabel(); renderExamples(); },
     setLanguage,

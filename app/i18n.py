@@ -365,14 +365,27 @@ CITIZEN_HI = {
 # Shared Copilot controls.  They deliberately live with the citizen catalog so
 # both public views use one reviewed English/Hindi source for the new UI.
 CITIZEN_EN.update({
-    "copilot_button": "Copilot",
-    "copilot_panel_title": "HeatShield Copilot",
-    "copilot_close": "Close Copilot",
-    "copilot_conversation": "Copilot conversation",
-    "copilot_context_none": "Using: current view",
-    "copilot_context_street": "Using: Street {name} at {time}",
-    "copilot_context_route": "Using: Route {origin} → {destination} at {time}",
-    "copilot_context_plan": "Using: Plan {water}/{cooling}/{shade}",
+    "nav_caption_authorities": "For authorities",
+    "nav_caption_citizens": "For citizens",
+    "language_short_english": "EN",
+    "language_short_hindi": "हिं",
+    "flow_label": "Four-step trip flow",
+    "flow_where": "Where",
+    "flow_when": "When",
+    "flow_compare": "Compare routes",
+    "flow_stops": "Stops and tips",
+    "summary_eyebrow": "Your trip heat overview",
+    "recommended": "Recommended",
+    "copilot_button": "Agni",
+    "copilot_panel_title": "Agni",
+    "copilot_subtitle": "HeatShield assistant",
+    "copilot_open": "Open Agni assistant",
+    "copilot_close": "Close Agni",
+    "copilot_conversation": "Agni conversation",
+    "copilot_context_none": "Agni uses: current view",
+    "copilot_context_street": "Agni uses: Street {name} at {time}",
+    "copilot_context_route": "Agni uses: Route {origin} → {destination} at {time}",
+    "copilot_context_plan": "Agni uses: Plan {water}/{cooling}/{shade}",
     "copilot_examples": "Example questions",
     "copilot_example_risk": "Why is this street high risk?",
     "copilot_example_plan": "Explain the current resource plan.",
@@ -382,12 +395,13 @@ CITIZEN_EN.update({
     "copilot_example_break": "I need a break along my current route.",
     "copilot_example_heat": "Mujhe route mein heat se bachne ke liye kya karna chahiye?",
     "copilot_example_height": "How were building heights estimated?",
-    "copilot_input_label": "Ask Copilot",
+    "copilot_input_label": "Ask Agni",
     "copilot_input_placeholder": "Ask about the current model results",
     "copilot_send": "Send",
     "copilot_clear": "Clear conversation",
     "copilot_character_count": "{count}/500",
-    "copilot_loading": "Copilot is checking model data…",
+    "copilot_loading": "Agni is checking model data…",
+    "copilot_empty_greeting": "Hi, I’m Agni. Ask about the current model results or choose an example below.",
     "copilot_template": "Template answer",
     "copilot_ai_assisted": "AI-assisted, fact-checked",
     "copilot_data_unavailable": "Data unavailable",
@@ -396,21 +410,34 @@ CITIZEN_EN.update({
     "copilot_assumptions": "Assumptions",
     "copilot_no_facts": "No cached facts were returned.",
     "copilot_retry": "Retry",
-    "copilot_error_network": "Copilot could not be reached. The platform still works without it.",
-    "copilot_error_timeout": "Copilot took too long to respond. The platform still works without it.",
+    "copilot_error_network": "Agni could not be reached. The platform still works without it.",
+    "copilot_error_timeout": "Agni took too long to respond. The platform still works without it.",
     "copilot_error_422": "Your message is too long. Keep it to 500 characters.",
-    "copilot_error_unavailable": "Copilot is unavailable. The platform still works without it.",
-    "copilot_footer": "Copilot explains model results; it does not diagnose or give medical advice.",
+    "copilot_error_unavailable": "Agni is unavailable. The platform still works without it.",
+    "copilot_footer": "Agni explains model results; it does not diagnose or give medical advice.",
 })
 CITIZEN_HI.update({
-    "copilot_button": "कोपायलट",
-    "copilot_panel_title": "हीटशील्ड कोपायलट",
-    "copilot_close": "कोपायलट बंद करें",
-    "copilot_conversation": "कोपायलट बातचीत",
-    "copilot_context_none": "उपयोग में: मौजूदा दृश्य",
-    "copilot_context_street": "उपयोग में: सड़क {name}, {time} पर",
-    "copilot_context_route": "उपयोग में: मार्ग {origin} → {destination}, {time} पर",
-    "copilot_context_plan": "उपयोग में: योजना {water}/{cooling}/{shade}",
+    "nav_caption_authorities": "अधिकारियों के लिए",
+    "nav_caption_citizens": "नागरिकों के लिए",
+    "language_short_english": "EN",
+    "language_short_hindi": "हिं",
+    "flow_label": "यात्रा के चार चरण",
+    "flow_where": "कहाँ",
+    "flow_when": "कब",
+    "flow_compare": "मार्ग तुलना",
+    "flow_stops": "ठहराव और सुझाव",
+    "summary_eyebrow": "आपकी यात्रा की गर्मी जानकारी",
+    "recommended": "सुझाया गया",
+    "copilot_button": "अग्नि",
+    "copilot_panel_title": "अग्नि",
+    "copilot_subtitle": "HeatShield सहायक",
+    "copilot_open": "अग्नि सहायक खोलें",
+    "copilot_close": "अग्नि बंद करें",
+    "copilot_conversation": "अग्नि बातचीत",
+    "copilot_context_none": "अग्नि उपयोग करती है: मौजूदा दृश्य",
+    "copilot_context_street": "अग्नि उपयोग करती है: सड़क {name}, {time} पर",
+    "copilot_context_route": "अग्नि उपयोग करती है: मार्ग {origin} → {destination}, {time} पर",
+    "copilot_context_plan": "अग्नि उपयोग करती है: योजना {water}/{cooling}/{shade}",
     "copilot_examples": "उदाहरण प्रश्न",
     "copilot_example_risk": "इस सड़क पर जोखिम अधिक क्यों है?",
     "copilot_example_plan": "मौजूदा संसाधन योजना समझाइए।",
@@ -420,12 +447,13 @@ CITIZEN_HI.update({
     "copilot_example_break": "मौजूदा मार्ग पर मुझे विश्राम की जगह चाहिए।",
     "copilot_example_heat": "मुझे route में heat से बचने के लिए क्या करना चाहिए?",
     "copilot_example_height": "इमारतों की ऊंचाई का अनुमान कैसे लगाया गया?",
-    "copilot_input_label": "कोपायलट से पूछें",
+    "copilot_input_label": "अग्नि से पूछें",
     "copilot_input_placeholder": "मौजूदा मॉडल नतीजों के बारे में पूछें",
     "copilot_send": "भेजें",
     "copilot_clear": "बातचीत साफ़ करें",
     "copilot_character_count": "{count}/500 वर्ण",
-    "copilot_loading": "कोपायलट मॉडल डेटा देख रहा है…",
+    "copilot_loading": "अग्नि मॉडल डेटा देख रही है…",
+    "copilot_empty_greeting": "नमस्ते, मैं अग्नि हूँ। मौजूदा मॉडल नतीजों के बारे में पूछें या नीचे से एक उदाहरण चुनें।",
     "copilot_template": "टेम्पलेट उत्तर",
     "copilot_ai_assisted": "AI-सहायित, तथ्य-जांचा हुआ",
     "copilot_data_unavailable": "डेटा उपलब्ध नहीं है",
@@ -434,16 +462,16 @@ CITIZEN_HI.update({
     "copilot_assumptions": "मान्यताएं",
     "copilot_no_facts": "सहेजे हुए तथ्य नहीं मिले।",
     "copilot_retry": "फिर से कोशिश करें",
-    "copilot_error_network": "कोपायलट से संपर्क नहीं हो सका। प्लेटफ़ॉर्म इसके बिना भी काम करता है।",
-    "copilot_error_timeout": "कोपायलट के उत्तर में बहुत समय लगा। प्लेटफ़ॉर्म इसके बिना भी काम करता है।",
+    "copilot_error_network": "अग्नि से संपर्क नहीं हो सका। प्लेटफ़ॉर्म इसके बिना भी काम करता है।",
+    "copilot_error_timeout": "अग्नि के उत्तर में बहुत समय लगा। प्लेटफ़ॉर्म इसके बिना भी काम करता है।",
     "copilot_error_422": "आपका संदेश बहुत लंबा है। इसे 500 वर्णों तक रखें।",
-    "copilot_error_unavailable": "कोपायलट उपलब्ध नहीं है। प्लेटफ़ॉर्म इसके बिना भी काम करता है।",
-    "copilot_footer": "कोपायलट मॉडल के नतीजे समझाता है; यह चिकित्सा संबंधी सलाह नहीं देता।",
+    "copilot_error_unavailable": "अग्नि उपलब्ध नहीं है। प्लेटफ़ॉर्म इसके बिना भी काम करता है।",
+    "copilot_footer": "अग्नि मॉडल के नतीजे समझाती है; यह चिकित्सा संबंधी सलाह नहीं देती।",
 })
 
 
 CITIZEN_REQUIRED_IDS = frozenset("""
-    page_title brand_name meta_description header_context nav_planner nav_citizen eyebrow title intro route_planner_title
+    page_title brand_name meta_description header_context nav_planner nav_citizen nav_caption_authorities nav_caption_citizens eyebrow title intro route_planner_title
     origin_label destination_label origin_placeholder destination_placeholder pick_origin pick_destination
     pick_instruction_origin pick_instruction_destination departure_time modelled interpolated find_routes
     finding_routes examples examples_note preset_kadavghat preset_yashwant preset_riverside
@@ -462,16 +490,16 @@ CITIZEN_REQUIRED_IDS = frozenset("""
     stop_type_water stop_type_cooling stop_type_shaded_public stop_type_business stop_type_other stops_unavailable stops_available
     stops_no_eligible stop_distance_value extra_minutes_value same_route_fastest recommendation_small
     recommendation_heat recommendation_no_reduction no_heat_route empty_routes selected_stop_status footer
-    language_label language_english language_hindi summary_title summary_before_location summary_exposure_label
+    language_label language_english language_hindi language_short_english language_short_hindi flow_label flow_where flow_when flow_compare flow_stops recommended summary_eyebrow summary_title summary_before_location summary_exposure_label
     summary_peak_label summary_water_label summary_cooling_label summary_lower_route summary_no_lower_route
     summary_level_low summary_level_moderate summary_level_high summary_peak_window summary_distance
     summary_data_unavailable summary_loading summary_error summary_error_area summary_status_modelled summary_status_estimated
     summary_status_interpolated summary_map_level
-    copilot_button copilot_panel_title copilot_close copilot_conversation copilot_context_none copilot_context_street
+    copilot_button copilot_panel_title copilot_subtitle copilot_open copilot_close copilot_conversation copilot_context_none copilot_context_street
     copilot_context_route copilot_context_plan copilot_examples copilot_example_risk copilot_example_plan
     copilot_example_data copilot_example_platform copilot_example_route copilot_example_break copilot_example_heat
     copilot_example_height copilot_input_label copilot_input_placeholder copilot_send copilot_clear
-    copilot_character_count copilot_loading copilot_template copilot_ai_assisted copilot_data_unavailable
+    copilot_character_count copilot_loading copilot_empty_greeting copilot_template copilot_ai_assisted copilot_data_unavailable
     copilot_facts_title copilot_facts copilot_assumptions copilot_no_facts copilot_retry copilot_error_network
     copilot_error_timeout copilot_error_422 copilot_error_unavailable copilot_footer
 """.split())
@@ -502,7 +530,7 @@ def validate_citizen_i18n() -> None:
     for key, value in CITIZEN_HI.items():
         if any(word in value.casefold() for word in forbidden_hindi):
             raise ValueError(f"Citizen Hindi string '{key}' contains prohibited wording.")
-    latin_only = {"brand_name", "language_english", "osm_attribution", "minutes", "metres", "stop_distance_value", "extra_minutes_value", "summary_distance"}
+    latin_only = {"brand_name", "language_english", "language_short_english", "osm_attribution", "minutes", "metres", "stop_distance_value", "extra_minutes_value", "summary_distance"}
     for key, value in CITIZEN_HI.items():
         if key not in latin_only and not any("\u0900" <= character <= "\u097f" for character in value):
             raise ValueError(f"Citizen Hindi string '{key}' has no Devanagari text.")

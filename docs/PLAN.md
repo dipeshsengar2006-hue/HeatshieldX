@@ -12,6 +12,7 @@ Non-negotiable constraints retained throughout this plan:
   priorities, or safety boundaries.
 - Deterministic engines are the source of truth. The Copilot explains actual
   structured outputs and never overrides them.
+- The assistant is branded **Agni** (HeatShield Copilot) in user-facing UI.
 - Modelled prioritization is not a medical measurement, diagnosis, individual
   heatstroke prediction, or guaranteed-safety claim.
 - Preserve Observed, Estimated, Modelled, and Interpolated status and the
