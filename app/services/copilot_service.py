@@ -1,3 +1,4 @@
+
 """Grounded, cache-backed Copilot retrieval and safe answer rendering."""
 
 from __future__ import annotations
