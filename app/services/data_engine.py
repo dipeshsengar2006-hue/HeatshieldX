@@ -5,21 +5,34 @@ from __future__ import annotations
 import json
 import logging
 import math
+import os
 import re
 import time
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlencode, urlparse
+import http.client
+from uuid import uuid4
 
 import geopandas as gpd
 import osmnx as ox
 from shapely.geometry.base import BaseGeometry
 
-from app.config import AppConfig, get_config
+from app.config import AppConfig, PROJECT_ROOT, get_config
 from app.contracts import Building, Provenance, StreetSegment
 
 
 LOGGER = logging.getLogger(__name__)
+
+_OVERPASS_ENDPOINTS = (
+    "https://overpass.private.coffee/api/interpreter",
+    "https://overpass.kumi.systems/api/interpreter",
+    "https://overpass-api.de/api/interpreter",
+)
+_OVERPASS_CONNECT_TIMEOUT_S = 30
+_OVERPASS_READ_TIMEOUT_S = 120
+_OVERPASS_RETRIES = 2
 
 
 class CoverageGateError(RuntimeError):
@@ -118,6 +131,18 @@ def _write_geojson(path: Path, gdf: gpd.GeoDataFrame) -> None:
     path.write_text(gdf.to_json(), encoding="utf-8")
 
 
+def _write_geojson_atomic(path: Path, gdf: gpd.GeoDataFrame) -> None:
+    """Replace a refresh cache only after its complete GeoJSON is ready."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary_path = path.with_name(f".{path.name}.{uuid4().hex}.tmp")
+    try:
+        temporary_path.write_text(gdf.to_json(), encoding="utf-8")
+        temporary_path.replace(path)
+    finally:
+        if temporary_path.exists():
+            temporary_path.unlink()
+
+
 def _normalize_streets(edges: gpd.GeoDataFrame, config: AppConfig) -> gpd.GeoDataFrame:
     projected = project_to_metric_crs(repair_and_filter_geometries(edges, {"LineString", "MultiLineString"}, "streets"))
     records: list[dict[str, Any]] = []
@@ -200,6 +225,92 @@ def stop_query_tags(config: AppConfig) -> dict[str, list[str]]:
     return {tag_key: sorted(values) for tag_key, values in tags.items()}
 
 
+def _dotenv_value(name: str) -> str | None:
+    """Read the one optional refresh override without adding a dotenv dependency."""
+    try:
+        lines = (PROJECT_ROOT / ".env").read_text(encoding="utf-8").splitlines()
+    except FileNotFoundError:
+        return None
+    for line in lines:
+        key, separator, value = line.partition("=")
+        if separator and key.strip() == name:
+            candidate = value.strip().strip('"\'')
+            return candidate or None
+    return None
+
+
+def overpass_endpoints() -> tuple[str, ...]:
+    """Return an optional local override followed by the resilient public order."""
+    override = os.getenv("OVERPASS_URL") or _dotenv_value("OVERPASS_URL")
+    endpoints = ((override,) if override else ()) + _OVERPASS_ENDPOINTS
+    return tuple(dict.fromkeys(endpoint for endpoint in endpoints if endpoint))
+
+
+def build_overpass_query(tags: dict[str, list[str]], config: AppConfig | None = None) -> str:
+    """Build a deterministic node/way/relation query for the configured demo area."""
+    active_config = config or get_config()
+    area = f"around:{active_config.demo_area.radius_m},{active_config.demo_area.center_lat},{active_config.demo_area.center_lon}"
+    clauses = [
+        f'  {element}["{tag_key}"~"^({"|".join(re.escape(value) for value in values)})$"]({area});'
+        for tag_key, values in sorted(tags.items())
+        for element in ("node", "way", "relation")
+    ]
+    return "[out:json][timeout:120];\n(\n" + "\n".join(clauses) + "\n);\nout center;"
+
+
+def stop_overpass_query(config: AppConfig | None = None) -> str:
+    return build_overpass_query(stop_query_tags(config or get_config()), config)
+
+
+def overpass_browser_url(query: str) -> str:
+    return "https://overpass-turbo.eu/?" + urlencode({"Q": query})
+
+
+def _post_overpass_query(endpoint: str, query: str) -> dict[str, Any]:
+    """Post one query with the required separate connection and read timeouts."""
+    parsed = urlparse(endpoint)
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+        raise ValueError(f"Invalid Overpass endpoint: {endpoint}")
+    connection_type = http.client.HTTPSConnection if parsed.scheme == "https" else http.client.HTTPConnection
+    connection = connection_type(parsed.hostname, parsed.port, timeout=_OVERPASS_CONNECT_TIMEOUT_S)
+    try:
+        connection.connect()
+        if connection.sock is not None:
+            connection.sock.settimeout(_OVERPASS_READ_TIMEOUT_S)
+        connection.request(
+            "POST",
+            (parsed.path or "/") + (f"?{parsed.query}" if parsed.query else ""),
+            body=urlencode({"data": query}),
+            headers={"Content-Type": "application/x-www-form-urlencoded", "Accept": "application/json"},
+        )
+        response = connection.getresponse()
+        if response.status != 200:
+            raise RuntimeError(f"HTTP {response.status} {response.reason}")
+        payload = json.loads(response.read().decode("utf-8"))
+    finally:
+        connection.close()
+    if not isinstance(payload, dict) or not isinstance(payload.get("elements"), list):
+        raise ValueError("Overpass response is missing an elements list")
+    return payload
+
+
+def fetch_overpass_json(query: str, sleep: Any = time.sleep) -> tuple[dict[str, Any], str]:
+    """Try each endpoint with retries; callers write caches only after success."""
+    failures: list[str] = []
+    for endpoint in overpass_endpoints():
+        for attempt in range(_OVERPASS_RETRIES + 1):
+            try:
+                payload = _post_overpass_query(endpoint, query)
+                LOGGER.info("Overpass refresh succeeded via %s (attempt %s)", endpoint, attempt + 1)
+                return payload, endpoint
+            except Exception as exc:  # Provider failures have inconsistent exception types.
+                failures.append(f"{endpoint} attempt {attempt + 1}: {exc}")
+                LOGGER.warning("Overpass refresh failed via %s (attempt %s): %s", endpoint, attempt + 1, exc)
+                if attempt < _OVERPASS_RETRIES:
+                    sleep(2**attempt)
+    raise RuntimeError("All Overpass endpoints failed; the existing cache was left unchanged. " + " | ".join(failures))
+
+
 def classify_stop(row: Any, config: AppConfig) -> tuple[str, list[str]] | None:
     """Classify one OSM feature using only configured stop tags; healthcare is excluded."""
     for stop_type, _priority in sorted(config.stop_type_priority.items(), key=lambda item: (item[1], item[0])):
@@ -265,10 +376,12 @@ def _normalize_stops(stops: gpd.GeoDataFrame, config: AppConfig) -> gpd.GeoDataF
         stop_type, amenities = classification
         geometry: BaseGeometry = row.geometry if row.geometry.geom_type == "Point" else row.geometry.centroid
         index_parts = index if isinstance(index, tuple) else (index,)
+        source_name = row.get("name")
+        name = str(source_name).strip() if isinstance(source_name, str) and source_name.strip() else f"Unnamed {stop_type}"
         records.append({
             "stop_id": "osm-" + "-".join(_safe_identifier(part) for part in index_parts),
             "stop_type": stop_type,
-            "name": _json_safe(row.get("name")),
+            "name": name,
             "amenities": json.dumps(amenities),
             "source_type": "osm",
             "source_reference": "OpenStreetMap via OSMnx",
@@ -286,6 +399,68 @@ def _normalize_stops(stops: gpd.GeoDataFrame, config: AppConfig) -> gpd.GeoDataF
             crs=projected.crs,
         )
     return gpd.GeoDataFrame(records, geometry="geometry", crs=projected.crs)
+
+
+def stops_from_overpass_json(payload: dict[str, Any], config: AppConfig | None = None) -> gpd.GeoDataFrame:
+    """Convert an Overpass JSON snapshot to the same observed safe-stop records."""
+    active_config = config or get_config()
+    elements = payload.get("elements") if isinstance(payload, dict) else None
+    if not isinstance(elements, list) or not elements:
+        raise ValueError("Overpass JSON must contain a non-empty elements list.")
+    records: list[dict[str, Any]] = []
+    for element in elements:
+        if not isinstance(element, dict) or element.get("type") not in {"node", "way", "relation"}:
+            raise ValueError("Overpass JSON contains an invalid element.")
+        if element.get("id") is None:
+            raise ValueError("Overpass JSON element is missing its stable id.")
+        tags = element.get("tags", {})
+        if not isinstance(tags, dict):
+            raise ValueError("Overpass JSON element tags must be an object.")
+        classification = classify_stop(tags, active_config)
+        if classification is None:
+            continue
+        if element.get("type") == "node":
+            latitude, longitude = element.get("lat"), element.get("lon")
+        else:
+            center = element.get("center")
+            if not isinstance(center, dict):
+                raise ValueError("Overpass ways and relations require center coordinates.")
+            latitude, longitude = center.get("lat"), center.get("lon")
+        try:
+            latitude, longitude = float(latitude), float(longitude)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("Overpass stop coordinates must be numeric.") from exc
+        if not (-90 <= latitude <= 90 and -180 <= longitude <= 180):
+            raise ValueError("Overpass stop coordinates are outside valid geographic bounds.")
+        records.append({
+            "element_type": element["type"], "element_id": element.get("id"), **tags,
+            "geometry": gpd.points_from_xy([longitude], [latitude])[0],
+        })
+    if not records:
+        raise ValueError("Overpass JSON contains no configured safe stops.")
+    source = gpd.GeoDataFrame(records, geometry="geometry", crs="EPSG:4326").set_index(["element_type", "element_id"])
+    return _normalize_stops(source, active_config)
+
+
+def import_overpass_stops(path: Path, config: AppConfig | None = None) -> dict[str, int | str]:
+    """Validate a saved response fully before atomically replacing stops.geojson."""
+    active_config = config or get_config()
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError(f"Could not read Overpass JSON: {exc}") from exc
+    records = stops_from_overpass_json(payload, active_config)
+    _write_geojson_atomic(active_config.cache_data_dir / "stops.geojson", _to_wgs84(records))
+    return _stop_report(records, active_config, "saved Overpass JSON")
+
+
+def _stop_report(records: gpd.GeoDataFrame, config: AppConfig, source: str) -> dict[str, int | str]:
+    return {
+        "stop_count": len(records),
+        "types": {stop_type: int((records.get("stop_type") == stop_type).sum()) for stop_type in config.stop_type_priority},
+        "config_version": config.version,
+        "source": source,
+    }
 
 
 def _to_wgs84(gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
@@ -376,28 +551,73 @@ def precompute_demo_area(config: AppConfig | None = None) -> dict[str, int | boo
     return coverage
 
 
-def precompute_stops(config: AppConfig | None = None) -> dict[str, int | str]:
+def precompute_stops(config: AppConfig | None = None, sleep: Any = time.sleep) -> dict[str, int | str]:
     """Refresh only cached OSM safe stops, leaving the base data caches untouched."""
     active_config = config or get_config()
     started = time.perf_counter()
-    point = (active_config.demo_area.center_lat, active_config.demo_area.center_lon)
     LOGGER.info("Loading OSM safe stops for %s", active_config.demo_area.name)
     try:
-        ox.settings.requests_timeout = active_config.osm_request_timeout_s
-        ox.settings.overpass_rate_limit = False
-        source_stops = ox.features_from_point(point, tags=stop_query_tags(active_config), dist=active_config.demo_area.radius_m)
-    except Exception as exc:  # OSM/network exceptions vary by provider and library version.
-        message = "Unable to load OpenStreetMap safe stops. Check network/Overpass availability, then rerun `python scripts/precompute_demo_area.py --stops-only`."
+        payload, endpoint = fetch_overpass_json(stop_overpass_query(active_config), sleep)
+        stop_records = stops_from_overpass_json(payload, active_config)
+    except Exception as exc:
+        message = "Unable to refresh OpenStreetMap safe stops. Check network/Overpass availability, then rerun `python scripts/precompute_demo_area.py --stops-only`; the existing cache was left unchanged."
         LOGGER.exception(message)
         raise RuntimeError(message) from exc
 
-    stop_records = _normalize_stops(source_stops, active_config)
-    _write_geojson(active_config.cache_data_dir / "stops.geojson", _to_wgs84(stop_records))
-    report = {
-        "stop_count": len(stop_records),
-        "types": {stop_type: int((stop_records.get("stop_type") == stop_type).sum()) if not stop_records.empty else 0 for stop_type in active_config.stop_type_priority},
-        "config_version": active_config.version,
-        "duration_seconds": time.perf_counter() - started,
-    }
+    _write_geojson_atomic(active_config.cache_data_dir / "stops.geojson", _to_wgs84(stop_records))
+    report = _stop_report(stop_records, active_config, endpoint)
+    report["duration_seconds"] = time.perf_counter() - started
     LOGGER.info("Safe-stop precompute completed in %.2fs: %s", report["duration_seconds"], report)
+    return report
+
+
+def precompute_facilities(config: AppConfig | None = None, sleep: Any = time.sleep) -> dict[str, int | str]:
+    """Refresh only cached existing OSM facilities using the same endpoint fallback."""
+    active_config = config or get_config()
+    started = time.perf_counter()
+    LOGGER.info("Loading OSM facilities for %s", active_config.demo_area.name)
+    try:
+        payload, endpoint = fetch_overpass_json(build_overpass_query(facility_query_tags(active_config), active_config), sleep)
+        elements = payload.get("elements", [])
+        facility_rows = []
+        for element in elements:
+            if not isinstance(element, dict) or element.get("type") not in {"node", "way", "relation"}:
+                raise ValueError("Overpass JSON contains an invalid facility element.")
+            if element.get("id") is None:
+                raise ValueError("Overpass facility element is missing its stable id.")
+            tags = element.get("tags", {})
+            if not isinstance(tags, dict) or classify_facility(tags, active_config) is None:
+                continue
+            if element["type"] == "node":
+                latitude, longitude = element.get("lat"), element.get("lon")
+            else:
+                center = element.get("center")
+                if not isinstance(center, dict):
+                    raise ValueError("Overpass facility ways and relations require center coordinates.")
+                latitude, longitude = center.get("lat"), center.get("lon")
+            facility_rows.append({
+                "element_type": element["type"], "element_id": element.get("id"), **tags,
+                "geometry": gpd.points_from_xy([float(longitude)], [float(latitude)])[0],
+            })
+        if not facility_rows:
+            raise ValueError("Overpass JSON contains no configured facilities.")
+        source = gpd.GeoDataFrame(facility_rows, geometry="geometry", crs="EPSG:4326").set_index(["element_type", "element_id"])
+        records = _normalize_facilities(source, active_config)
+        if records.empty:
+            raise ValueError("Overpass JSON contains no valid configured facilities.")
+    except Exception as exc:
+        message = "Unable to refresh OpenStreetMap facilities. Check network/Overpass availability, then rerun `python scripts/precompute_demo_area.py --facilities-only`; the existing cache was left unchanged."
+        LOGGER.exception(message)
+        raise RuntimeError(message) from exc
+
+    _write_geojson_atomic(active_config.cache_data_dir / "facilities.geojson", _to_wgs84(records))
+    type_counts = {
+        facility_type: int((records.get("facility_type") == facility_type).sum())
+        for facility_type in active_config.facility_classification_order
+    }
+    report: dict[str, int | str] = {
+        "facility_count": len(records), "types": type_counts, "config_version": active_config.version,
+        "source": endpoint, "duration_seconds": time.perf_counter() - started,
+    }
+    LOGGER.info("Facility precompute completed in %.2fs: %s", report["duration_seconds"], report)
     return report

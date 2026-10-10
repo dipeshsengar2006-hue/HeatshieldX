@@ -36,6 +36,28 @@ not modify the cached streets, buildings, or facilities files.
 python scripts/precompute_demo_area.py --stops-only
 ```
 
+The refresh tries the configured `OVERPASS_URL` first (when present in `.env`),
+then the documented public endpoint fallback order. It retries with backoff and
+never replaces the existing stop cache unless a complete, non-empty response is
+validated. To inspect the exact query without any network request:
+
+```powershell
+python scripts/precompute_demo_area.py --stops-only --print-query
+```
+
+The command prints an Overpass Turbo browser URL. Save its JSON response, then
+import it with the same classification and provenance rules:
+
+```powershell
+python scripts/import_overpass_json.py path\to\overpass-response.json
+```
+
+Refresh existing water/cooling/healthcare facilities independently when needed:
+
+```powershell
+python scripts/precompute_demo_area.py --facilities-only
+```
+
 Until that cache is present, routing remains available and returns `No stop
 data available` for each route.
 
